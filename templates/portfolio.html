@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Мой Портфель | T-Invest{% endblock %}
+
+{% block content %}
+    <h1>💼 Мой Инвестиционный Портфель</h1>
+    <hr style="border-color: #333;">
+
+    {% if portfolio.error %}
+        <div style="background-color: #ff4c4c; color: white; padding: 15px; border-radius: 8px; margin-top: 20px;">
+            <h3>🚨 Ошибка соединения!</h3>
+            <p>{{ portfolio.error }}</p>
+        </div>
+    {% else %}
+        <div style="background-color: #1e1e1e; padding: 20px; border-radius: 8px; margin-top: 20px; max-width: 500px; border: 1px solid #333;">
+            <p style="color: #888; font-size: 0.9em;">ID Счета: {{ portfolio.account_id }}</p>
+            
+            <h3 style="color: #4da6ff;">💰 Стоимость активов:</h3>
+            <ul style="list-style-type: none; padding: 0; font-size: 1.1em;">
+                <li style="margin-bottom: 10px;">📈 <strong>Акции:</strong> {{ portfolio.total_shares_rub|floatformat:2 }} ₽</li>
+                <li style="margin-bottom: 10px;">📄 <strong>Облигации:</strong> {{ portfolio.total_bonds_rub|floatformat:2 }} ₽</li>
+                <li style="margin-bottom: 10px;">📦 <strong>Фонды (ETF):</strong> {{ portfolio.total_etf_rub|floatformat:2 }} ₽</li>
+            </ul>
+
+            <hr style="border-color: #333; margin: 20px 0;">
+            <p style="font-size: 1.1em;"><strong>Всего уникальных позиций:</strong> {{ portfolio.positions_count }} шт.</p>
+        </div>
+    {% endif %}
+{% endblock %}
