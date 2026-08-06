@@ -137,14 +137,11 @@
         fetch(`/api/real-data/?figi=${figi}`)
             .then(res => res.json())
             .then(data => {
-                if (data.status === "error") {
-                    alertBox.className = 'alert-box alert-danger';
-                    alertBox.innerHTML = `❌ ${data.message}`;
-                    return;
-                }
-                if (data.status === "loading") {
-                    alertBox.className = 'alert-box';
-                    alertBox.innerHTML = `⏳ ${data.message}`;
+                if (data.status === "error" || data.status === "loading") {
+                    if(data.status === "error") {
+                        alertBox.className = 'alert-box alert-danger';
+                        alertBox.innerHTML = `❌ ${data.message}`;
+                    }
                     return;
                 }
 
@@ -180,19 +177,49 @@
                     lineSeries.update({ time: Math.floor(Date.now() / 1000), value: data.current_price });
                 }
 
+                // ==========================================
+                // РИСУЕМ ГИСТОГРАММЫ ОБЪЕМА (КАК НА СКРИНШОТЕ)
+                // ==========================================
+                
+                // 1. Находим максимальный объем среди всех видимых заявок (чтобы взять его за 100%)
+                let maxVolume = 0;
+                data.asks.forEach(a => { if (a.quantity > maxVolume) maxVolume = a.quantity; });
+                data.bids.forEach(b => { if (b.quantity > maxVolume) maxVolume = b.quantity; });
+                if (maxVolume === 0) maxVolume = 1; // Защита от деления на ноль
+
                 const asksBody = document.getElementById('asksBody');
                 const bidsBody = document.getElementById('bidsBody');
                 
+                // 2. Отрисовка Продавцов (красные)
                 asksBody.innerHTML = '';
                 [...data.asks].reverse().forEach(ask => {
                     const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= WHALE_THRESHOLD;
-                    asksBody.innerHTML += `<tr class="${isWhale ? 'whale-row' : ''}"><td>${ask.quantity}</td><td class="ask-price">${ask.price.toFixed(2)}</td></tr>`;
+                    const fillPercent = (ask.quantity / maxVolume) * 100;
+                    
+                    // CSS-магия: полупрозрачная заливка слева направо
+                    const bg = `linear-gradient(to right, rgba(242, 54, 69, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
+                    
+                    asksBody.innerHTML += `
+                        <tr class="${isWhale ? 'whale-row' : ''}">
+                            <td style="background: ${bg};">${ask.quantity}</td>
+                            <td class="ask-price">${ask.price.toFixed(2)}</td>
+                        </tr>`;
                 });
 
+                // 3. Отрисовка Покупателей (зеленые)
                 bidsBody.innerHTML = '';
                 data.bids.forEach(bid => {
                     const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= WHALE_THRESHOLD;
-                    bidsBody.innerHTML += `<tr class="${isWhale ? 'whale-row' : ''}"><td>${bid.quantity}</td><td class="bid-price">${bid.price.toFixed(2)}</td></tr>`;
+                    const fillPercent = (bid.quantity / maxVolume) * 100;
+                    
+                    // CSS-магия: полупрозрачная заливка справа налево
+                    const bg = `linear-gradient(to left, rgba(8, 153, 129, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
+                    
+                    bidsBody.innerHTML += `
+                        <tr class="${isWhale ? 'whale-row' : ''}">
+                            <td style="background: ${bg};">${bid.quantity}</td>
+                            <td class="bid-price">${bid.price.toFixed(2)}</td>
+                        </tr>`;
                 });
             })
             .catch(error => console.log("Сетевая пауза, пробуем снова..."))
@@ -207,7 +234,7 @@
         
         initChart(); 
         fetchRealData(); 
-        trackerInterval = setInterval(fetchRealData, 300); // Реактивные 300 мс!
+        trackerInterval = setInterval(fetchRealData, 300); 
     }
 </script>
 

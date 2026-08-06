@@ -38,7 +38,7 @@ def send_telegram_message(message):
     except: pass
 
 # ==========================================
-# ФОНОВЫЙ РОБОТ (РАБОТАЕТ КАК В КОНСОЛИ)
+# ФОНОВЫЙ РОБОТ СО СКОЛЬЗЯЩЕЙ КАЛИБРОВКОЙ
 # ==========================================
 GLOBAL_DATA = {}
 ACTIVE_FIGI = None
@@ -47,27 +47,28 @@ LOT_SIZE = 10
 ANOMALY_MULTIPLIER = 3.0
 
 def start_stream_in_thread(figi):
-    """Запускает асинхронный цикл в отдельном потоке"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(stream_data(figi))
 
 async def stream_data(figi):
-    """Сам робот, который качает поток Т-Банка в глобальный словарь"""
     global GLOBAL_DATA, ACTIVE_FIGI
     
-    history_bids = collections.deque(maxlen=30)
-    history_asks = collections.deque(maxlen=30)
+    # СКОЛЬЗЯЩЕЕ ОКНО: храним историю за последние 300 секунд (5 минут)
+    history_bids = collections.deque(maxlen=300)
+    history_asks = collections.deque(maxlen=300)
+    
     last_tg_alert = 0
     last_calib_time = 0
     
     try:
         async with AsyncClient(INVEST_TOKEN) as client:
             async def request_iterator():
+                # Запрашиваем глубину 50 уровней (как в терминале Т-Банка)
                 yield MarketDataRequest(
                     subscribe_order_book_request=SubscribeOrderBookRequest(
                         subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
-                        instruments=[OrderBookInstrument(figi=figi, depth=10)]
+                        instruments=[OrderBookInstrument(figi=figi, depth=50)]
                     )
                 )
                 while True:
@@ -75,28 +76,32 @@ async def stream_data(figi):
 
             async for marketdata in client.market_data_stream.market_data_stream(request_iterator()):
                 if ACTIVE_FIGI != figi:
-                    break # Если пользователь сменил акцию - выключаем этот поток
+                    break 
                     
                 if marketdata.orderbook:
                     ob = marketdata.orderbook
                     current_time = time.time()
 
-                    bids = [{"price": float(quotation_to_decimal(b.price)), "quantity": b.quantity} for b in ob.bids[:10]]
-                    asks = [{"price": float(quotation_to_decimal(a.price)), "quantity": a.quantity} for a in ob.asks[:10]]
+                    # Собираем данные по всей глубине (до 50 уровней)
+                    bids = [{"price": float(quotation_to_decimal(b.price)), "quantity": b.quantity} for b in ob.bids]
+                    asks = [{"price": float(quotation_to_decimal(a.price)), "quantity": a.quantity} for a in ob.asks]
 
                     cur_bid_rub = sum(b['price'] * b['quantity'] * LOT_SIZE for b in bids)
                     cur_ask_rub = sum(a['price'] * a['quantity'] * LOT_SIZE for a in asks)
 
+                    # Каждую секунду добавляем значение в скользящее окно
                     if current_time - last_calib_time >= 1.0:
                         history_bids.append(cur_bid_rub)
                         history_asks.append(cur_ask_rub)
                         last_calib_time = current_time
 
+                    # Первичный прогрев (ждем хотя бы 30 секунд перед поиском аномалий)
                     is_calib = len(history_bids) < 30
                     anomaly_msg = ""
                     is_anomaly = False
 
                     if not is_calib:
+                        # Динамическая медиана по последним 5 минутам
                         med_bid = statistics.median(history_bids)
                         med_ask = statistics.median(history_asks)
 
@@ -113,19 +118,24 @@ async def stream_data(figi):
 
                     cur_price = (bids[0]['price'] + asks[0]['price']) / 2 if bids and asks else 0
 
-                    # МОМЕНТАЛЬНО ЗАПИСЫВАЕМ В ПАМЯТЬ СЕРВЕРА
+                    # На фронтенд для красивого отображения в стакане отправляем топ-20 уровней
                     GLOBAL_DATA[figi] = {
                         "status": "ok",
-                        "bids": bids, "asks": asks,
-                        "is_calibrating": is_calib, "anomaly_msg": anomaly_msg, "is_anomaly": is_anomaly,
-                        "total_bid_rubles": cur_bid_rub, "total_ask_rubles": cur_ask_rub,
-                        "total_volume": cur_bid_rub + cur_ask_rub, "current_price": cur_price
+                        "bids": bids[:20], 
+                        "asks": asks[:20],
+                        "is_calibrating": is_calib, 
+                        "anomaly_msg": anomaly_msg, 
+                        "is_anomaly": is_anomaly,
+                        "total_bid_rubles": cur_bid_rub, 
+                        "total_ask_rubles": cur_ask_rub,
+                        "total_volume": cur_bid_rub + cur_ask_rub, 
+                        "current_price": cur_price
                     }
     except Exception as e:
         GLOBAL_DATA[figi] = {"status": "error", "message": f"Ошибка потока: {e}"}
 
 # ==========================================
-# ОТДАЧА ДАННЫХ В БРАУЗЕР (БЫСТРО КАК МОЛНИЯ)
+# ОТДАЧА ДАННЫХ В БРАУЗЕР
 # ==========================================
 def real_market_page(request):
     return render(request, "real_market.html")
@@ -138,13 +148,11 @@ def api_real_data(request):
         
     figi = request.GET.get('figi', 'BBG004730N88')
     
-    # Если запрашиваем новую акцию - запускаем фонового робота
     if ACTIVE_FIGI != figi:
         ACTIVE_FIGI = figi
         GLOBAL_DATA[figi] = {"status": "loading", "message": "Подключение к бирже..."}
         STREAM_THREAD = threading.Thread(target=start_stream_in_thread, args=(figi,), daemon=True)
         STREAM_THREAD.start()
         
-    # Моментально отдаем то, что лежит в оперативной памяти!
     data = GLOBAL_DATA.get(figi, {"status": "loading", "message": "Инициализация..."})
     return JsonResponse(data)
