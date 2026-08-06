@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>T-Invest Pro Terminal</title>
+    <!-- Пытаемся загрузить график, но если не выйдет - ничего не сломается -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #131722; color: #d1d4dc; margin: 0; padding: 15px; }
+        
+        .header { display: flex; align-items: center; justify-content: space-between; background: #1e222d; padding: 10px 20px; border-radius: 8px; margin-bottom: 15px; }
+        .stock-info { display: flex; align-items: center; gap: 10px; }
+        .stock-icon { width: 32px; height: 32px; background: #2962ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; }
+        .stock-name { font-size: 20px; font-weight: bold; color: #ffffff; }
+        
+        .controls { display: flex; gap: 10px; }
+        input { padding: 8px 15px; border-radius: 5px; border: 1px solid #2b313f; background: #131722; color: white; width: 200px; outline: none; }
+        button { padding: 8px 20px; border-radius: 5px; border: none; background: #2962ff; color: white; cursor: pointer; font-weight: bold; }
+        
+        .alert-box { padding: 10px; text-align: center; border-radius: 5px; font-weight: bold; background-color: #1e222d; margin-bottom: 15px; }
+        .alert-calibrating { color: #ffb300; border: 1px solid #ffb300; background: rgba(255, 179, 0, 0.1); }
+        .alert-danger { color: #ff5252; border: 1px solid #ff5252; background: rgba(255, 82, 82, 0.1); }
+        
+        .main-grid { display: grid; grid-template-columns: 2.5fr 1fr; gap: 15px; height: calc(100vh - 140px); }
+        .panel { background: #1e222d; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; }
+        #chart-container { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; color: #787b86; }
+
+        .volumes-header { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2b313f; font-size: 14px; }
+        .vol-buy { color: #089981; font-weight: bold; font-size: 16px; }
+        .vol-sell { color: #f23645; font-weight: bold; font-size: 16px; }
+        .vol-total { color: #ffffff; font-weight: bold; font-size: 16px; }
+        
+        /* Прогресс-бары как в консоли */
+        .progress-container { width: 100%; background-color: #2b313f; border-radius: 4px; margin-bottom: 5px; overflow: hidden; height: 18px; display: flex; align-items: center; position: relative; }
+        .progress-bar-buy { height: 100%; background-color: #089981; transition: width 0.3s; }
+        .progress-bar-sell { height: 100%; background-color: #f23645; transition: width 0.3s; }
+        .progress-text { position: absolute; width: 100%; text-align: center; font-size: 11px; font-weight: bold; color: white; z-index: 2; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 10px; }
+        th { text-align: right; padding: 5px; color: #787b86; font-weight: normal; border-bottom: 1px solid #2b313f; }
+        th:first-child { text-align: left; }
+        td { padding: 4px 5px; text-align: right; }
+        td:first-child { text-align: left; }
+        
+        .bid-price { color: #089981; }
+        .ask-price { color: #f23645; }
+        .whale-row { background-color: rgba(255, 255, 255, 0.08); font-weight: bold; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="stock-info">
+            <div class="stock-icon">S</div>
+            <div class="stock-name" id="displayTicker">FIGI</div>
+        </div>
+        <div class="controls">
+            <input type="text" id="figiInput" value="BBG004730N88" placeholder="FIGI...">
+            <button onclick="startTracking()">Подключиться</button>
+        </div>
+    </div>
+
+    <div id="alertBox" class="alert-box">Введите FIGI и нажмите "Подключиться"</div>
+
+    <div class="main-grid">
+        <div class="panel">
+            <div id="chart-container">График ожидает подключения...</div>
+        </div>
+
+        <div class="panel">
+            <div class="volumes-header">
+                <div>Покупки: <br><span id="totalBids" class="vol-buy">0 ₽</span></div>
+                <div style="text-align: center;">Оборот: <br><span id="totalVolume" class="vol-total">0 ₽</span></div>
+                <div style="text-align: right;">Продажи: <br><span id="totalAsks" class="vol-sell">0 ₽</span></div>
+            </div>
+            
+            <!-- Полоски баланса как в консоли -->
+            <div class="progress-container">
+                <div id="barBuy" class="progress-bar-buy" style="width: 50%;"></div>
+                <div class="progress-text" id="textBuy">Покупатели: 50%</div>
+            </div>
+            <div class="progress-container">
+                <div id="barSell" class="progress-bar-sell" style="width: 50%;"></div>
+                <div class="progress-text" id="textSell">Продавцы: 50%</div>
+            </div>
+            
+            <table>
+                <thead><tr><th>Объем</th><th>Цена ₽</th></tr></thead>
+                <tbody id="asksBody"></tbody>
+                <tbody><tr><td colspan="2" style="text-align: center; padding: 10px 0; color: #787b86;">--- Спред ---</td></tr></tbody>
+                <tbody id="bidsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+    const LOT_SIZE = 10;
+    const WHALE_THRESHOLD = 15_000_000;
+    let trackerInterval = null;
+    let chart = null, lineSeries = null;
+    let isChartBroken = false;
+    let isFetching = false;
+
+    function initChart() {
+        const container = document.getElementById('chart-container');
+        try {
+            if (!window.LightweightCharts) {
+                isChartBroken = true;
+                container.innerHTML = "График недоступен, но стакан работает!";
+                return;
+            }
+            container.innerHTML = ''; 
+            chart = LightweightCharts.createChart(container, {
+                layout: { background: { type: 'solid', color: '#1e222d' }, textColor: '#d1d4dc' },
+                grid: { vertLines: { color: '#2b313f' }, horzLines: { color: '#2b313f' } },
+                timeScale: { timeVisible: true, secondsVisible: true },
+            });
+            lineSeries = chart.addLineSeries({ color: '#2962ff', lineWidth: 2 });
+            isChartBroken = false;
+        } catch (e) {
+            isChartBroken = true;
+            container.innerHTML = "Ошибка графика. Стакан работает.";
+        }
+    }
+
+    function formatMillions(rubles) {
+        return (rubles / 1_000_000).toFixed(1) + 'М ₽';
+    }
+
+    function fetchRealData() {
+        if (isFetching) return;
+        isFetching = true;
+
+        const figi = document.getElementById('figiInput').value;
+        const alertBox = document.getElementById('alertBox');
+        
+        fetch(`/api/real-data/?figi=${figi}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "error") {
+                    alertBox.className = 'alert-box alert-danger';
+                    alertBox.innerHTML = `❌ ${data.message}`;
+                    return;
+                }
+                if (data.status === "loading") {
+                    alertBox.className = 'alert-box';
+                    alertBox.innerHTML = `⏳ ${data.message}`;
+                    return;
+                }
+
+                // Алерты
+                if (data.is_calibrating) {
+                    alertBox.className = 'alert-box alert-calibrating';
+                    alertBox.innerHTML = '⏳ Идет калибровка аномалий... (30 сек)';
+                } else if (data.is_anomaly) {
+                    alertBox.className = 'alert-box alert-danger';
+                    alertBox.innerHTML = `🚨 ${data.anomaly_msg}`;
+                } else {
+                    alertBox.className = 'alert-box';
+                    alertBox.style.color = '#787b86';
+                    alertBox.innerHTML = '⚡ Прямой эфир активен';
+                }
+
+                document.getElementById('totalBids').innerText = formatMillions(data.total_bid_rubles);
+                document.getElementById('totalAsks').innerText = formatMillions(data.total_ask_rubles);
+                document.getElementById('totalVolume').innerText = formatMillions(data.total_volume);
+
+                let bidPercent = 50, askPercent = 50;
+                if (data.total_volume > 0) {
+                    bidPercent = (data.total_bid_rubles / data.total_volume) * 100;
+                    askPercent = (data.total_ask_rubles / data.total_volume) * 100;
+                }
+                document.getElementById('barBuy').style.width = `${bidPercent}%`;
+                document.getElementById('textBuy').innerText = `Покупатели: ${bidPercent.toFixed(1)}%`;
+                
+                document.getElementById('barSell').style.width = `${askPercent}%`;
+                document.getElementById('textSell').innerText = `Продавцы: ${askPercent.toFixed(1)}%`;
+
+                if (!isChartBroken && data.current_price > 0 && lineSeries) {
+                    lineSeries.update({ time: Math.floor(Date.now() / 1000), value: data.current_price });
+                }
+
+                const asksBody = document.getElementById('asksBody');
+                const bidsBody = document.getElementById('bidsBody');
+                
+                asksBody.innerHTML = '';
+                [...data.asks].reverse().forEach(ask => {
+                    const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= WHALE_THRESHOLD;
+                    asksBody.innerHTML += `<tr class="${isWhale ? 'whale-row' : ''}"><td>${ask.quantity}</td><td class="ask-price">${ask.price.toFixed(2)}</td></tr>`;
+                });
+
+                bidsBody.innerHTML = '';
+                data.bids.forEach(bid => {
+                    const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= WHALE_THRESHOLD;
+                    bidsBody.innerHTML += `<tr class="${isWhale ? 'whale-row' : ''}"><td>${bid.quantity}</td><td class="bid-price">${bid.price.toFixed(2)}</td></tr>`;
+                });
+            })
+            .catch(error => console.log("Сетевая пауза, пробуем снова..."))
+            .finally(() => {
+                isFetching = false;
+            });
+    }
+
+    function startTracking() {
+        if (trackerInterval) clearInterval(trackerInterval);
+        document.getElementById('displayTicker').innerText = document.getElementById('figiInput').value;
+        
+        initChart(); 
+        fetchRealData(); 
+        trackerInterval = setInterval(fetchRealData, 300); // Реактивные 300 мс!
+    }
+</script>
+
+</body>
+</html>

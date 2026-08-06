@@ -1,10 +1,23 @@
 import asyncio
 import os
 import random
+import time
+import aiohttp
 from datetime import datetime
+from dotenv import load_dotenv
+
+# --- НАСТРОЙКИ ---
+load_dotenv()
+
+TG_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TG_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 LOT_SIZE = 10
 WHALE_THRESHOLD = 15_000_000
+TG_COOLDOWN_SECONDS = 10  # Уменьшенный кулдаун для быстрого тестирования
+
+# Глобальная переменная для отслеживания времени последнего алерта в ТГ
+last_tg_alert_time = 0
 
 
 def create_bar(percentage, length=30):
@@ -17,6 +30,27 @@ class MockOrder:
     def __init__(self, price, quantity):
         self.price = price
         self.quantity = quantity
+
+
+async def send_telegram_message(message: str):
+    """Отправляет сообщение в Telegram асинхронно"""
+    if not TG_BOT_TOKEN or not TG_CHAT_ID:
+        return  # Если ключи не настроены, пропускаем
+
+    url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TG_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url, json=payload) as response:
+                if response.status != 200:
+                    print(f"⚠️ Ошибка отправки в ТГ: {await response.text()}")
+        except Exception as e:
+            print(f"❌ Ошибка соединения с ТГ: {e}")
 
 
 async def generate_stream():
@@ -37,7 +71,6 @@ async def generate_stream():
 
         if is_whale_active:
             # МАГИЯ ЗДЕСЬ: Имитируем каскадную панику или работу крупного алгоритма
-            # Заливаем красным сразу 5 уровней подряд!
             asks[2] = MockOrder(base_price + 0.02, 50000)  # ~142 млн руб.
             asks[3] = MockOrder(base_price + 0.03, 85000)  # ~241 млн руб.
             asks[4] = MockOrder(base_price + 0.04, 150000)  # ~426 млн руб.
@@ -49,6 +82,8 @@ async def generate_stream():
 
 
 async def run_simulation():
+    global last_tg_alert_time
+
     async for bids, asks, time_now, is_whale_active in generate_stream():
         total_bid_rubles = sum(b.price * b.quantity * LOT_SIZE for b in bids)
         total_ask_rubles = sum(a.price * a.quantity * LOT_SIZE for a in asks)
@@ -61,6 +96,21 @@ async def run_simulation():
 
         if is_whale_active:
             print(f"🚨 ВНИМАНИЕ: ЭКСТРЕМАЛЬНОЕ ДАВЛЕНИЕ ПРОДАВЦОВ! (Время: {time_now.strftime('%H:%M:%S')})")
+            
+            # --- БЛОК ОТПРАВКИ В TELEGRAM ---
+            current_time = time.time()
+            if current_time - last_tg_alert_time > TG_COOLDOWN_SECONDS:
+                tg_msg = (
+                    f"🐋 <b>СИМУЛЯТОР: ОБНАРУЖЕН КИТ!</b>\n\n"
+                    f"🔴 Замечено экстремальное давление продавцов.\n"
+                    f"Объем продаж: {total_ask_rubles / 1_000_000:.1f}М ₽\n"
+                    f"Время: {time_now.strftime('%H:%M:%S')}"
+                )
+                asyncio.create_task(send_telegram_message(tg_msg))
+                last_tg_alert_time = current_time
+                print("📨 Уведомление отправлено в Telegram!")
+            else:
+                print(f"⏳ ТГ на паузе ({int(TG_COOLDOWN_SECONDS - (current_time - last_tg_alert_time))} сек)...")
         else:
             print(f"🌊 СИМУЛЯЦИЯ: Спокойный рынок... (Время: {time_now.strftime('%H:%M:%S')})")
 

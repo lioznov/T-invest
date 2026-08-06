@@ -30,6 +30,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    'dashboard', # <--- Ваше приложение должно быть здесь
 ]
 
 MIDDLEWARE = [
@@ -47,7 +49,8 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        # УКАЗЫВАЕМ ПУТЬ К НАШЕЙ ПАПКЕ ЗДЕСЬ:
+        'DIRS': [BASE_DIR / 'templates'], 
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
