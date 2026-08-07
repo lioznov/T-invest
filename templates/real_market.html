@@ -3,45 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <title>T-Invest Pro Terminal</title>
-    <!-- Пытаемся загрузить график, но если не выйдет - ничего не сломается -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.js"></script>
+    <!-- Надежная ссылка с указанием конкретной версии! -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #131722; color: #d1d4dc; margin: 0; padding: 15px; }
-        
+
         .header { display: flex; align-items: center; justify-content: space-between; background: #1e222d; padding: 10px 20px; border-radius: 8px; margin-bottom: 15px; }
         .stock-info { display: flex; align-items: center; gap: 10px; }
         .stock-icon { width: 32px; height: 32px; background: #2962ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; }
         .stock-name { font-size: 20px; font-weight: bold; color: #ffffff; }
-        
-        .controls { display: flex; gap: 10px; }
-        input { padding: 8px 15px; border-radius: 5px; border: 1px solid #2b313f; background: #131722; color: white; width: 200px; outline: none; }
+
+        .controls { display: flex; gap: 10px; align-items: center; }
+        input { padding: 8px 15px; border-radius: 5px; border: 1px solid #2b313f; background: #131722; color: white; width: 180px; outline: none; }
+
+        select { padding: 8px 10px; border-radius: 5px; border: 1px solid #2b313f; background: #131722; color: #d1d4dc; cursor: pointer; outline: none; font-size: 14px; transition: 0.2s; }
+        select:hover, select:focus { border-color: #2962ff; }
+        optgroup { background: #1e222d; color: #787b86; font-style: normal; font-weight: bold; }
+        option { background: #131722; color: #d1d4dc; }
+
         button { padding: 8px 20px; border-radius: 5px; border: none; background: #2962ff; color: white; cursor: pointer; font-weight: bold; }
-        
+
         .alert-box { padding: 10px; text-align: center; border-radius: 5px; font-weight: bold; background-color: #1e222d; margin-bottom: 15px; }
         .alert-calibrating { color: #ffb300; border: 1px solid #ffb300; background: rgba(255, 179, 0, 0.1); }
         .alert-danger { color: #ff5252; border: 1px solid #ff5252; background: rgba(255, 82, 82, 0.1); }
-        
+
         .main-grid { display: grid; grid-template-columns: 2.5fr 1fr; gap: 15px; height: calc(100vh - 140px); }
-        .panel { background: #1e222d; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; }
-        #chart-container { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; color: #787b86; }
+        .panel-chart { background: #1e222d; border-radius: 8px; position: relative; }
+        .panel-book { background: #1e222d; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; }
+
+        #chart-container { position: absolute; top: 15px; bottom: 15px; left: 15px; right: 15px; display: flex; align-items: center; justify-content: center; color: #787b86;}
 
         .volumes-header { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2b313f; font-size: 14px; }
         .vol-buy { color: #089981; font-weight: bold; font-size: 16px; }
         .vol-sell { color: #f23645; font-weight: bold; font-size: 16px; }
         .vol-total { color: #ffffff; font-weight: bold; font-size: 16px; }
-        
-        /* Прогресс-бары как в консоли */
-        .progress-container { width: 100%; background-color: #2b313f; border-radius: 4px; margin-bottom: 5px; overflow: hidden; height: 18px; display: flex; align-items: center; position: relative; }
-        .progress-bar-buy { height: 100%; background-color: #089981; transition: width 0.3s; }
-        .progress-bar-sell { height: 100%; background-color: #f23645; transition: width 0.3s; }
-        .progress-text { position: absolute; width: 100%; text-align: center; font-size: 11px; font-weight: bold; color: white; z-index: 2; }
 
         table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 10px; }
         th { text-align: right; padding: 5px; color: #787b86; font-weight: normal; border-bottom: 1px solid #2b313f; }
         th:first-child { text-align: left; }
         td { padding: 4px 5px; text-align: right; }
         td:first-child { text-align: left; }
-        
+
         .bid-price { color: #089981; }
         .ask-price { color: #f23645; }
         .whale-row { background-color: rgba(255, 255, 255, 0.08); font-weight: bold; color: white; }
@@ -51,39 +53,57 @@
 
     <div class="header">
         <div class="stock-info">
-            <div class="stock-icon">S</div>
-            <div class="stock-name" id="displayTicker">FIGI</div>
+            <div class="stock-icon" id="iconTicker">S</div>
+            <div class="stock-name" id="displayTicker">BBG004730N88</div>
         </div>
         <div class="controls">
             <input type="text" id="figiInput" value="BBG004730N88" placeholder="FIGI...">
+
+            <select id="timeframeSelect" onchange="changeTimeframe()">
+                <optgroup label="Секунды">
+                    <option value="5s">5 секунд</option>
+                    <option value="10s">10 секунд</option>
+                    <option value="30s">30 секунд</option>
+                </optgroup>
+                <optgroup label="Минуты">
+                    <option value="1m" selected>1 минута</option>
+                    <option value="2m">2 минуты</option>
+                    <option value="3m">3 минуты</option>
+                    <option value="5m">5 минут</option>
+                    <option value="10m">10 минут</option>
+                    <option value="15m">15 минут</option>
+                    <option value="30m">30 минут</option>
+                </optgroup>
+                <optgroup label="Часы">
+                    <option value="1h">1 час</option>
+                    <option value="2h">2 часа</option>
+                    <option value="4h">4 часа</option>
+                </optgroup>
+                <optgroup label="Дни">
+                    <option value="1d">1 день</option>
+                    <option value="1w">1 неделя</option>
+                    <option value="1M">1 месяц</option>
+                </optgroup>
+            </select>
+
             <button onclick="startTracking()">Подключиться</button>
         </div>
     </div>
 
-    <div id="alertBox" class="alert-box">Введите FIGI и нажмите "Подключиться"</div>
+    <div id="alertBox" class="alert-box">Ожидание инициализации...</div>
 
     <div class="main-grid">
-        <div class="panel">
+        <div class="panel-chart">
             <div id="chart-container">График ожидает подключения...</div>
         </div>
 
-        <div class="panel">
+        <div class="panel-book">
             <div class="volumes-header">
                 <div>Покупки: <br><span id="totalBids" class="vol-buy">0 ₽</span></div>
-                <div style="text-align: center;">Оборот: <br><span id="totalVolume" class="vol-total">0 ₽</span></div>
+                <div style="text-align: center;">Емкость: <br><span id="totalVolume" class="vol-total">0 ₽</span></div>
                 <div style="text-align: right;">Продажи: <br><span id="totalAsks" class="vol-sell">0 ₽</span></div>
             </div>
-            
-            <!-- Полоски баланса как в консоли -->
-            <div class="progress-container">
-                <div id="barBuy" class="progress-bar-buy" style="width: 50%;"></div>
-                <div class="progress-text" id="textBuy">Покупатели: 50%</div>
-            </div>
-            <div class="progress-container">
-                <div id="barSell" class="progress-bar-sell" style="width: 50%;"></div>
-                <div class="progress-text" id="textSell">Продавцы: 50%</div>
-            </div>
-            
+
             <table>
                 <thead><tr><th>Объем</th><th>Цена ₽</th></tr></thead>
                 <tbody id="asksBody"></tbody>
@@ -97,30 +117,70 @@
     const LOT_SIZE = 10;
     const WHALE_THRESHOLD = 15_000_000;
     let trackerInterval = null;
-    let chart = null, lineSeries = null;
-    let isChartBroken = false;
+    let chart = null, candleSeries = null;
+    let currentHistoricalCandle = null;
     let isFetching = false;
+    let isChartBroken = false;
+
+    // ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК ОШИБОК ДЛЯ ДИАГНОСТИКИ
+    window.onerror = function(msg, url, line) {
+        const alertBox = document.getElementById('alertBox');
+        if(alertBox) {
+            alertBox.className = 'alert-box alert-danger';
+            alertBox.innerHTML = `❌ Критическая ошибка в браузере: ${msg} (строка ${line})`;
+        }
+    };
 
     function initChart() {
         const container = document.getElementById('chart-container');
-        try {
-            if (!window.LightweightCharts) {
-                isChartBroken = true;
-                container.innerHTML = "График недоступен, но стакан работает!";
-                return;
-            }
-            container.innerHTML = ''; 
-            chart = LightweightCharts.createChart(container, {
-                layout: { background: { type: 'solid', color: '#1e222d' }, textColor: '#d1d4dc' },
-                grid: { vertLines: { color: '#2b313f' }, horzLines: { color: '#2b313f' } },
-                timeScale: { timeVisible: true, secondsVisible: true },
-            });
-            lineSeries = chart.addLineSeries({ color: '#2962ff', lineWidth: 2 });
-            isChartBroken = false;
-        } catch (e) {
+
+        if (typeof LightweightCharts === 'undefined') {
             isChartBroken = true;
-            container.innerHTML = "Ошибка графика. Стакан работает.";
+            container.innerHTML = "Ошибка: библиотека графиков не загрузилась. Провайдер блокирует CDN.";
+            return;
         }
+
+        container.innerHTML = '';
+
+        chart = LightweightCharts.createChart(container, {
+            autoSize: true,
+            layout: { background: { type: 'solid', color: '#1e222d' }, textColor: '#d1d4dc' },
+            grid: { vertLines: { color: '#2b313f' }, horzLines: { color: '#2b313f' } },
+            timeScale: { timeVisible: true, secondsVisible: true, timeFunction: (time) => time },
+        });
+
+        candleSeries = chart.addCandlestickSeries({
+            upColor: '#089981', downColor: '#f23645', borderVisible: false,
+            wickUpColor: '#089981', wickDownColor: '#f23645'
+        });
+        isChartBroken = false;
+    }
+
+    function fetchHistory(figi, tf) {
+        if (isChartBroken) return;
+
+        fetch(`/api/history/?figi=${figi}&tf=${tf}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok' && data.candles.length > 0) {
+                    candleSeries.setData(data.candles);
+                    currentHistoricalCandle = data.candles[data.candles.length - 1];
+                } else if (data.status === 'error') {
+                    console.error("Ошибка загрузки истории:", data.message);
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    function changeTimeframe() {
+        const tf = document.getElementById('timeframeSelect').value;
+        const figi = document.getElementById('figiInput').value;
+        const alertBox = document.getElementById('alertBox');
+
+        alertBox.className = 'alert-box alert-calibrating';
+        alertBox.innerHTML = `⏳ Переключение таймфрейма: <b>${tf}</b>...`;
+
+        fetchHistory(figi, tf);
     }
 
     function formatMillions(rubles) {
@@ -133,19 +193,22 @@
 
         const figi = document.getElementById('figiInput').value;
         const alertBox = document.getElementById('alertBox');
-        
+
         fetch(`/api/real-data/?figi=${figi}`)
             .then(res => res.json())
             .then(data => {
-                if (data.status === "error" || data.status === "loading") {
-                    if(data.status === "error") {
-                        alertBox.className = 'alert-box alert-danger';
-                        alertBox.innerHTML = `❌ ${data.message}`;
-                    }
+                if (data.status === "loading") {
+                    alertBox.className = 'alert-box';
+                    alertBox.innerHTML = `⏳ ${data.message}`;
                     return;
                 }
 
-                // Алерты
+                if (data.status === "error") {
+                    alertBox.className = 'alert-box alert-danger';
+                    alertBox.innerHTML = `❌ ${data.message}`;
+                    return;
+                }
+
                 if (data.is_calibrating) {
                     alertBox.className = 'alert-box alert-calibrating';
                     alertBox.innerHTML = '⏳ Идет калибровка аномалий... (30 сек)';
@@ -162,67 +225,40 @@
                 document.getElementById('totalAsks').innerText = formatMillions(data.total_ask_rubles);
                 document.getElementById('totalVolume').innerText = formatMillions(data.total_volume);
 
-                let bidPercent = 50, askPercent = 50;
-                if (data.total_volume > 0) {
-                    bidPercent = (data.total_bid_rubles / data.total_volume) * 100;
-                    askPercent = (data.total_ask_rubles / data.total_volume) * 100;
-                }
-                document.getElementById('barBuy').style.width = `${bidPercent}%`;
-                document.getElementById('textBuy').innerText = `Покупатели: ${bidPercent.toFixed(1)}%`;
-                
-                document.getElementById('barSell').style.width = `${askPercent}%`;
-                document.getElementById('textSell').innerText = `Продавцы: ${askPercent.toFixed(1)}%`;
-
-                if (!isChartBroken && data.current_price > 0 && lineSeries) {
-                    lineSeries.update({ time: Math.floor(Date.now() / 1000), value: data.current_price });
+                if (!isChartBroken && data.current_price > 0 && candleSeries && currentHistoricalCandle) {
+                    currentHistoricalCandle.close = data.current_price;
+                    if (data.current_price > currentHistoricalCandle.high) currentHistoricalCandle.high = data.current_price;
+                    if (data.current_price < currentHistoricalCandle.low) currentHistoricalCandle.low = data.current_price;
+                    candleSeries.update(currentHistoricalCandle);
                 }
 
-                // ==========================================
-                // РИСУЕМ ГИСТОГРАММЫ ОБЪЕМА (КАК НА СКРИНШОТЕ)
-                // ==========================================
-                
-                // 1. Находим максимальный объем среди всех видимых заявок (чтобы взять его за 100%)
                 let maxVolume = 0;
                 data.asks.forEach(a => { if (a.quantity > maxVolume) maxVolume = a.quantity; });
                 data.bids.forEach(b => { if (b.quantity > maxVolume) maxVolume = b.quantity; });
-                if (maxVolume === 0) maxVolume = 1; // Защита от деления на ноль
+                if (maxVolume === 0) maxVolume = 1;
 
                 const asksBody = document.getElementById('asksBody');
                 const bidsBody = document.getElementById('bidsBody');
-                
-                // 2. Отрисовка Продавцов (красные)
+
                 asksBody.innerHTML = '';
                 [...data.asks].reverse().forEach(ask => {
                     const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= WHALE_THRESHOLD;
                     const fillPercent = (ask.quantity / maxVolume) * 100;
-                    
-                    // CSS-магия: полупрозрачная заливка слева направо
                     const bg = `linear-gradient(to right, rgba(242, 54, 69, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
-                    
-                    asksBody.innerHTML += `
-                        <tr class="${isWhale ? 'whale-row' : ''}">
-                            <td style="background: ${bg};">${ask.quantity}</td>
-                            <td class="ask-price">${ask.price.toFixed(2)}</td>
-                        </tr>`;
+                    asksBody.innerHTML += `<tr class="${isWhale ? 'whale-row' : ''}"><td style="background: ${bg};">${ask.quantity}</td><td class="ask-price">${ask.price.toFixed(2)}</td></tr>`;
                 });
 
-                // 3. Отрисовка Покупателей (зеленые)
                 bidsBody.innerHTML = '';
                 data.bids.forEach(bid => {
                     const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= WHALE_THRESHOLD;
                     const fillPercent = (bid.quantity / maxVolume) * 100;
-                    
-                    // CSS-магия: полупрозрачная заливка справа налево
                     const bg = `linear-gradient(to left, rgba(8, 153, 129, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
-                    
-                    bidsBody.innerHTML += `
-                        <tr class="${isWhale ? 'whale-row' : ''}">
-                            <td style="background: ${bg};">${bid.quantity}</td>
-                            <td class="bid-price">${bid.price.toFixed(2)}</td>
-                        </tr>`;
+                    bidsBody.innerHTML += `<tr class="${isWhale ? 'whale-row' : ''}"><td style="background: ${bg};">${bid.quantity}</td><td class="bid-price">${bid.price.toFixed(2)}</td></tr>`;
                 });
             })
-            .catch(error => console.log("Сетевая пауза, пробуем снова..."))
+            .catch(error => {
+                console.error("Ошибка сети:", error);
+            })
             .finally(() => {
                 isFetching = false;
             });
@@ -230,13 +266,22 @@
 
     function startTracking() {
         if (trackerInterval) clearInterval(trackerInterval);
-        document.getElementById('displayTicker').innerText = document.getElementById('figiInput').value;
-        
-        initChart(); 
-        fetchRealData(); 
-        trackerInterval = setInterval(fetchRealData, 300); 
-    }
-</script>
 
+        const figi = document.getElementById('figiInput').value;
+        const tf = document.getElementById('timeframeSelect').value;
+        document.getElementById('displayTicker').innerText = figi;
+
+        initChart();
+        fetchHistory(figi, tf);
+        fetchRealData();
+
+        trackerInterval = setInterval(fetchRealData, 300);
+    }
+
+    // АВТОЗАПУСК ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
+    window.onload = function() {
+        startTracking();
+    };
+</script>
 </body>
 </html>
