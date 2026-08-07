@@ -63,7 +63,6 @@ async def stream_data(figi):
     history_asks = collections.deque(maxlen=30)
     last_tg_alert, last_calib_time = 0, 0
 
-    # БЕСКОНЕЧНЫЙ ЦИКЛ (Авто-переподключение)
     while ACTIVE_FIGI == figi:
         try:
             async with AsyncClient(INVEST_TOKEN) as client:
@@ -71,7 +70,8 @@ async def stream_data(figi):
                     yield MarketDataRequest(
                         subscribe_order_book_request=SubscribeOrderBookRequest(
                             subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
-                            instruments=[OrderBookInstrument(figi=figi, depth=10)]
+                            # ТЕПЕРЬ СЕРВЕР КАЧАЕТ МАКСИМАЛЬНУЮ ГЛУБИНУ СТАКАНА: 50 СТРОК
+                            instruments=[OrderBookInstrument(figi=figi, depth=50)]
                         )
                     )
                     while True: await asyncio.sleep(1)
@@ -82,10 +82,13 @@ async def stream_data(figi):
                     if marketdata.orderbook:
                         ob = marketdata.orderbook
                         current_time = time.time()
+
+                        # СОХРАНЯЕМ ВСЕ 50 УРОВНЕЙ В ПАМЯТЬ
                         bids = [{"price": float(quotation_to_decimal(b.price)), "quantity": b.quantity} for b in
-                                ob.bids[:10]]
+                                ob.bids[:50]]
                         asks = [{"price": float(quotation_to_decimal(a.price)), "quantity": a.quantity} for a in
-                                ob.asks[:10]]
+                                ob.asks[:50]]
+
                         cur_bid_rub = sum(b['price'] * b['quantity'] * LOT_SIZE for b in bids)
                         cur_ask_rub = sum(a['price'] * a['quantity'] * LOT_SIZE for a in asks)
 
@@ -117,7 +120,6 @@ async def stream_data(figi):
                             "total_volume": cur_bid_rub + cur_ask_rub, "current_price": cur_price
                         }
         except Exception as e:
-            # Если сеть оборвалась, мы не умираем, а ждем 2 секунды и пробуем снова!
             print(f"Потеряно соединение. Переподключение... Ошибка: {e}")
             GLOBAL_DATA[figi] = {"status": "loading", "message": "Восстановление связи с биржей..."}
             await asyncio.sleep(2)
