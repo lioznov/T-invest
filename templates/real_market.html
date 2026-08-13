@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>T-Invest Pro Terminal</title>
+<<<<<<< HEAD
     <!-- Надежная ссылка на библиотеку графиков -->
+=======
+>>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #131722; color: #d1d4dc; margin: 0; padding: 15px; }
@@ -86,6 +89,10 @@
                 </optgroup>
             </select>
 
+<<<<<<< HEAD
+=======
+            <!-- НОВЫЙ ВЫБОР ГЛУБИНЫ СТАКАНА -->
+>>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
             <select id="depthSelect" onchange="changeDepth()">
                 <option value="10" selected>10 строк</option>
                 <option value="20">20 строк</option>
@@ -129,7 +136,11 @@
     let currentHistoricalCandle = null;
     let isFetching = false;
     let isChartBroken = false;
+<<<<<<< HEAD
     let currentDepth = 10;
+=======
+    let currentDepth = 10; // ТЕКУЩАЯ ГЛУБИНА ПО УМОЛЧАНИЮ
+>>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
 
     window.onerror = function(msg, url, line) {
         const alertBox = document.getElementById('alertBox');
@@ -189,6 +200,10 @@
         fetchHistory(figi, tf);
     }
 
+<<<<<<< HEAD
+=======
+    // НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ГЛУБИНЫ СТАКАНА
+>>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
     function changeDepth() {
         currentDepth = parseInt(document.getElementById('depthSelect').value);
     }
@@ -242,6 +257,10 @@
                     candleSeries.update(currentHistoricalCandle);
                 }
 
+<<<<<<< HEAD
+=======
+                // ОБРЕЗАЕМ СТАКАН ДО ВЫБРАННОЙ ГЛУБИНЫ (например, до 20 строк)
+>>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
                 let visibleAsks = data.asks.slice(0, currentDepth);
                 let visibleBids = data.bids.slice(0, currentDepth);
 

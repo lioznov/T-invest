@@ -70,6 +70,10 @@ async def stream_data(figi):
                     yield MarketDataRequest(
                         subscribe_order_book_request=SubscribeOrderBookRequest(
                             subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
+<<<<<<< HEAD
+=======
+                            # ТЕПЕРЬ СЕРВЕР КАЧАЕТ МАКСИМАЛЬНУЮ ГЛУБИНУ СТАКАНА: 50 СТРОК
+>>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
                             instruments=[OrderBookInstrument(figi=figi, depth=50)]
                         )
                     )
@@ -82,6 +86,10 @@ async def stream_data(figi):
                         ob = marketdata.orderbook
                         current_time = time.time()
 
+<<<<<<< HEAD
+=======
+                        # СОХРАНЯЕМ ВСЕ 50 УРОВНЕЙ В ПАМЯТЬ
+>>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
                         bids = [{"price": float(quotation_to_decimal(b.price)), "quantity": b.quantity} for b in
                                 ob.bids[:50]]
                         asks = [{"price": float(quotation_to_decimal(a.price)), "quantity": a.quantity} for a in
