@@ -1,29 +1,120 @@
-{% extends 'base.html' %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Мой Портфель — T-Invest Pro</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #131722; color: #d1d4dc; margin: 0; padding: 20px; }
+        .header { display: flex; align-items: center; justify-content: space-between; background: #1e222d; padding: 15px 25px; border-radius: 8px; margin-bottom: 20px; }
+        .nav-link { color: #2962ff; text-decoration: none; font-weight: bold; }
+        .nav-link:hover { text-decoration: underline; }
 
-{% block title %}Мой Портфель | T-Invest{% endblock %}
+        .summary-card { background: #1e222d; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 40px; }
+        .summary-item div:first-child { color: #787b86; font-size: 13px; margin-bottom: 5px; }
+        .summary-value { font-size: 22px; font-weight: bold; color: #fff; }
 
-{% block content %}
-    <h1>💼 Мой Инвестиционный Портфель</h1>
-    <hr style="border-color: #333;">
+        .panel { background: #1e222d; border-radius: 8px; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; padding: 10px; color: #787b86; border-bottom: 1px solid #2b313f; }
+        td { padding: 12px 10px; border-bottom: 1px solid #2b313f; }
 
-    {% if portfolio.error %}
-        <div style="background-color: #ff4c4c; color: white; padding: 15px; border-radius: 8px; margin-top: 20px;">
-            <h3>🚨 Ошибка соединения!</h3>
-            <p>{{ portfolio.error }}</p>
+        .positive { color: #089981; font-weight: bold; }
+        .negative { color: #f23645; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2 style="margin: 0; color: #fff;">📊 Портфель инвестора</h2>
+        <a href="/" class="nav-link">← Вернуться к терминалу и стакану</a>
+    </div>
+
+    <div class="summary-card">
+        <div class="summary-item">
+            <div>Общая стоимость портфеля</div>
+            <div class="summary-value" id="totalCost">0.00 ₽</div>
         </div>
-    {% else %}
-        <div style="background-color: #1e1e1e; padding: 20px; border-radius: 8px; margin-top: 20px; max-width: 500px; border: 1px solid #333;">
-            <p style="color: #888; font-size: 0.9em;">ID Счета: {{ portfolio.account_id }}</p>
-            
-            <h3 style="color: #4da6ff;">💰 Стоимость активов:</h3>
-            <ul style="list-style-type: none; padding: 0; font-size: 1.1em;">
-                <li style="margin-bottom: 10px;">📈 <strong>Акции:</strong> {{ portfolio.total_shares_rub|floatformat:2 }} ₽</li>
-                <li style="margin-bottom: 10px;">📄 <strong>Облигации:</strong> {{ portfolio.total_bonds_rub|floatformat:2 }} ₽</li>
-                <li style="margin-bottom: 10px;">📦 <strong>Фонды (ETF):</strong> {{ portfolio.total_etf_rub|floatformat:2 }} ₽</li>
-            </ul>
-
-            <hr style="border-color: #333; margin: 20px 0;">
-            <p style="font-size: 1.1em;"><strong>Всего уникальных позиций:</strong> {{ portfolio.positions_count }} шт.</p>
+        <div class="summary-item">
+            <div>Общая доходность</div>
+            <div class="summary-value" id="totalYield">0.00 ₽</div>
         </div>
-    {% endif %}
-{% endblock %}
+    </div>
+
+    <div class="panel">
+        <h3 style="margin-top: 0; color: #fff;">Купленные активы</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>FIGI / Акция</th>
+                    <th>Количество</th>
+                    <th>Средняя цена</th>
+                    <th>Текущая цена</th>
+                    <th>Стоимость позиции</th>
+                    <th>Доходность</th>
+                </tr>
+            </thead>
+            <tbody id="portfolioBody">
+                <tr><td colspan="6" style="text-align: center; color: #787b86;">Загрузка портфеля...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+<script>
+    function loadPortfolio() {
+        fetch('/api/portfolio/')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "error") {
+                    document.getElementById('portfolioBody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: #f23645;">❌ ${data.message}</td></tr>`;
+                    return;
+                }
+
+                // Вывод общей стоимости портфеля
+                document.getElementById('totalCost').innerText = data.total_portfolio_cost.toLocaleString('ru-RU', {style: 'currency', currency: 'RUB'});
+
+                // Вывод общей доходности (Рубли + Проценты)
+                const yieldElem = document.getElementById('totalYield');
+                const isProfitable = data.expected_yield_rubles >= 0;
+                const sign = isProfitable && data.expected_yield_rubles > 0 ? "+" : "";
+
+                yieldElem.innerText = `${sign}${data.expected_yield_rubles.toFixed(2)} ₽ (${sign}${data.expected_yield_percent.toFixed(2)}%)`;
+                yieldElem.className = "summary-value " + (isProfitable ? "positive" : "negative");
+
+                // Вывод таблицы
+                const tbody = document.getElementById('portfolioBody');
+                tbody.innerHTML = '';
+
+                if (data.positions.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #787b86;">У вас пока нет открытых позиций на этом счете.</td></tr>`;
+                    return;
+                }
+
+                data.positions.forEach(p => {
+                    const isProf = p.expected_yield >= 0;
+                    const yClass = isProf ? "positive" : "negative";
+                    const s = isProf && p.expected_yield > 0 ? "+" : "";
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><b>${p.figi}</b></td>
+                            <td>${p.quantity} шт.</td>
+                            <td>${p.average_price.toFixed(2)} ₽</td>
+                            <td>${p.current_price.toFixed(2)} ₽</td>
+                            <td>${p.total_sum.toFixed(2)} ₽</td>
+                            <td class="${yClass}">${s}${p.expected_yield.toFixed(2)} ₽ (${s}${p.yield_percent.toFixed(2)}%)</td>
+                        </tr>
+                    `;
+                });
+            })
+            .catch(err => {
+                document.getElementById('portfolioBody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: #f23645;">❌ Ошибка при отрисовке данных</td></tr>`;
+                console.error("Ошибка:", err);
+            });
+    }
+
+    // Загружаем портфель при открытии страницы
+    loadPortfolio();
+</script>
+
+</body>
+</html>

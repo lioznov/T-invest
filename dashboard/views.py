@@ -70,10 +70,6 @@ async def stream_data(figi):
                     yield MarketDataRequest(
                         subscribe_order_book_request=SubscribeOrderBookRequest(
                             subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
-<<<<<<< HEAD
-=======
-                            # ТЕПЕРЬ СЕРВЕР КАЧАЕТ МАКСИМАЛЬНУЮ ГЛУБИНУ СТАКАНА: 50 СТРОК
->>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
                             instruments=[OrderBookInstrument(figi=figi, depth=50)]
                         )
                     )
@@ -86,10 +82,6 @@ async def stream_data(figi):
                         ob = marketdata.orderbook
                         current_time = time.time()
 
-<<<<<<< HEAD
-=======
-                        # СОХРАНЯЕМ ВСЕ 50 УРОВНЕЙ В ПАМЯТЬ
->>>>>>> f7f7735eeefa842427d7ac48ff88a0857287a069
                         bids = [{"price": float(quotation_to_decimal(b.price)), "quantity": b.quantity} for b in
                                 ob.bids[:50]]
                         asks = [{"price": float(quotation_to_decimal(a.price)), "quantity": a.quantity} for a in
@@ -191,5 +183,70 @@ def api_history_data(request):
                         "close": float(quotation_to_decimal(c.close)),
                     })
             return JsonResponse({"status": "ok", "candles": data})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)})
+
+
+def portfolio_page(request):
+    return render(request, "portfolio.html")
+
+
+def api_portfolio_data(request):
+    if not INVEST_TOKEN:
+        return JsonResponse({"status": "error", "message": "Токен не найден!"})
+
+    try:
+        with Client(INVEST_TOKEN) as client:
+            accounts_response = client.users.get_accounts()
+            if not accounts_response.accounts:
+                return JsonResponse({"status": "error", "message": "Счета не найдены!"})
+
+            # Берем первый активный счет
+            account_id = accounts_response.accounts[0].id
+            portfolio = client.operations.get_portfolio(account_id=account_id)
+
+            positions_data = []
+            total_yield_rub = 0.0
+            total_invested = 0.0
+
+            for p in portfolio.positions:
+                # Безопасно переводим цены из Quotation в float (если данных нет, ставим 0.0)
+                qty = float(quotation_to_decimal(p.quantity)) if p.quantity else 0.0
+                avg_price = float(quotation_to_decimal(p.average_position_price)) if p.average_position_price else 0.0
+                curr_price = float(quotation_to_decimal(p.current_price)) if p.current_price else 0.0
+
+                # Доходность конкретной позиции в рублях
+                pos_yield_rub = float(quotation_to_decimal(p.expected_yield)) if p.expected_yield else 0.0
+
+                invested_sum = avg_price * qty
+                yield_percent = (pos_yield_rub / invested_sum * 100) if invested_sum > 0 else 0.0
+
+                # Суммируем для вычисления общего процента портфеля
+                total_yield_rub += pos_yield_rub
+                total_invested += invested_sum
+
+                positions_data.append({
+                    "figi": p.figi,
+                    "instrument_type": p.instrument_type,
+                    "quantity": qty,
+                    "average_price": avg_price,
+                    "current_price": curr_price,
+                    "expected_yield": pos_yield_rub,
+                    "yield_percent": yield_percent,
+                    "total_sum": curr_price * qty
+                })
+
+            # Считаем честный общий процент по всему портфелю
+            total_yield_percent = (total_yield_rub / total_invested * 100) if total_invested > 0 else 0.0
+            total_portfolio_cost = float(
+                quotation_to_decimal(portfolio.total_amount_portfolio)) if portfolio.total_amount_portfolio else 0.0
+
+            return JsonResponse({
+                "status": "ok",
+                "total_portfolio_cost": total_portfolio_cost,
+                "expected_yield_rubles": total_yield_rub,
+                "expected_yield_percent": total_yield_percent,
+                "positions": positions_data
+            })
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)})
