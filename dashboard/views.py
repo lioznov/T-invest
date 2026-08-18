@@ -23,7 +23,6 @@ from t_tech.invest import (
     OrderBookInstrument,
     CandleInterval
 )
-from t_tech.invest.exceptions import RequestError
 from t_tech.invest.utils import quotation_to_decimal
 
 os.environ["GRPC_DEFAULT_SSL_ROOTS_FILE_PATH"] = certifi.where()
@@ -38,7 +37,7 @@ GLOBAL_DATA = {}
 ACTIVE_FIGI = None
 STREAM_THREAD = None
 LOT_SIZE = 10
-ANOMALY_MULTIPLIER = 3.0
+ANOMALY_MULTIPLIER = 3.0  # Для каскадов (x3)
 
 
 def send_telegram_message(message):
@@ -62,6 +61,8 @@ async def stream_data(figi):
     history_bids = collections.deque(maxlen=30)
     history_asks = collections.deque(maxlen=30)
     last_tg_alert, last_calib_time = 0, 0
+
+    active_whales = {}
 
     while ACTIVE_FIGI == figi:
         try:
@@ -89,33 +90,100 @@ async def stream_data(figi):
 
                         cur_bid_rub = sum(b['price'] * b['quantity'] * LOT_SIZE for b in bids)
                         cur_ask_rub = sum(a['price'] * a['quantity'] * LOT_SIZE for a in asks)
+                        cur_price = (bids[0]['price'] + asks[0]['price']) / 2 if bids and asks else 0
 
+                        # === 1. СОБИРАЕМ ИСТОРИЮ (Калибровка) ===
                         if current_time - last_calib_time >= 1.0:
                             history_bids.append(cur_bid_rub)
                             history_asks.append(cur_ask_rub)
                             last_calib_time = current_time
 
                         is_calib = len(history_bids) < 30
-                        anomaly_msg, is_anomaly = "", False
 
+                        bids_dict = {b['price']: b['quantity'] for b in bids}
+                        asks_dict = {a['price']: a['quantity'] for a in asks}
+
+                        alerts_to_send = []
+                        prices_to_remove = []
+
+                        # Дефолтные значения (пока идет калибровка)
+                        dynamic_whale_bid = 100_000_000
+                        dynamic_whale_ask = 100_000_000
+
+                        # === 2. АДАПТИВНЫЙ АНАЛИЗ ===
                         if not is_calib:
-                            med_bid, med_ask = statistics.median(history_bids), statistics.median(history_asks)
+                            med_bid = statistics.median(history_bids)
+                            med_ask = statistics.median(history_asks)
+
+                            # АДАПТИВНЫЕ ПЛИТЫ: Плита - это заявка >= 25% от обычной емкости стакана (мин. 2 млн руб)
+                            dynamic_whale_bid = max(med_bid * 0.25, 2_000_000)
+                            dynamic_whale_ask = max(med_ask * 0.25, 2_000_000)
+
+                            # КАСКАДЫ (3x от медианы)
                             if cur_bid_rub > (med_bid * ANOMALY_MULTIPLIER):
-                                anomaly_msg, is_anomaly = f"🟢 КАСКАД ПОКУПОК! {cur_bid_rub / 1_000_000:.1f}М ₽", True
+                                alerts_to_send.append(
+                                    f"🌊 <b>КАСКАД ПОКУПОК!</b>\nОбъем вырос в 3 раза: {cur_bid_rub / 1_000_000:.1f}М ₽")
                             elif cur_ask_rub > (med_ask * ANOMALY_MULTIPLIER):
-                                anomaly_msg, is_anomaly = f"🔴 КАСКАД ПРОДАЖ! {cur_ask_rub / 1_000_000:.1f}М ₽", True
-                            if is_anomaly and (current_time - last_tg_alert > 60):
-                                await asyncio.to_thread(send_telegram_message,
-                                                        f"🚨 <b>АНОМАЛИЯ!</b>\nАкция: {figi}\n{anomaly_msg}")
+                                alerts_to_send.append(
+                                    f"🌊 <b>КАСКАД ПРОДАЖ!</b>\nОбъем вырос в 3 раза: {cur_ask_rub / 1_000_000:.1f}М ₽")
+
+                            # ПРОВЕРКА ПРОБОЕВ И СПУФИНГА
+                            for price, data in active_whales.items():
+                                w_type = data['type']
+                                if w_type == 'bid':
+                                    if bids_dict.get(price, 0) * price * LOT_SIZE < dynamic_whale_bid:
+                                        if cur_price <= price:
+                                            alerts_to_send.append(
+                                                f"📉 <b>ПРОБОЙ ВНИЗ!</b>\nПлита покупателя на {price} ₽ уничтожена!")
+                                        else:
+                                            alerts_to_send.append(
+                                                f"👻 <b>СПУФИНГ!</b>\nПлита покупателя на {price} ₽ пропала.")
+                                        prices_to_remove.append(price)
+                                elif w_type == 'ask':
+                                    if asks_dict.get(price, 0) * price * LOT_SIZE < dynamic_whale_ask:
+                                        if cur_price >= price:
+                                            alerts_to_send.append(
+                                                f"🚀 <b>ПРОБОЙ ВВЕРХ!</b>\nПлита продавца на {price} ₽ уничтожена!")
+                                        else:
+                                            alerts_to_send.append(
+                                                f"👻 <b>СПУФИНГ!</b>\nПлита продавца на {price} ₽ пропала.")
+                                        prices_to_remove.append(price)
+
+                            for p in prices_to_remove: del active_whales[p]
+
+                            # ИЩЕМ НОВЫЕ ПЛИТЫ С ВЫВОДОМ КОЛИЧЕСТВА ЛОТОВ
+                            for price, qty in bids_dict.items():
+                                vol = price * qty * LOT_SIZE
+                                if vol >= dynamic_whale_bid and price not in active_whales:
+                                    active_whales[price] = {'type': 'bid', 'vol': vol}
+                                    alerts_to_send.append(
+                                        f"🟢 <b>ПЛИТА (Покупка)</b>\nЦена: {price} ₽\nЛоты: <b>{qty} шт.</b>\nСумма: {vol / 1_000_000:.1f}М ₽")
+
+                            for price, qty in asks_dict.items():
+                                vol = price * qty * LOT_SIZE
+                                if vol >= dynamic_whale_ask and price not in active_whales:
+                                    active_whales[price] = {'type': 'ask', 'vol': vol}
+                                    alerts_to_send.append(
+                                        f"🔴 <b>ПЛИТА (Продажа)</b>\nЦена: {price} ₽\nЛоты: <b>{qty} шт.</b>\nСумма: {vol / 1_000_000:.1f}М ₽")
+
+                        # Отправка сообщений
+                        anomaly_msg, is_anomaly = "", False
+                        if alerts_to_send:
+                            anomaly_msg = alerts_to_send[0].replace("\n", " ")
+                            is_anomaly = True
+                            if current_time - last_tg_alert > 10:
+                                tg_msg = f"🔔 <b>АКЦИЯ: {figi}</b>\n\n" + "\n\n".join(alerts_to_send)
+                                await asyncio.to_thread(send_telegram_message, tg_msg)
                                 last_tg_alert = current_time
 
-                        cur_price = (bids[0]['price'] + asks[0]['price']) / 2 if bids and asks else 0
-
+                        # Данные для Фронтенда
                         GLOBAL_DATA[figi] = {
                             "status": "ok", "bids": bids, "asks": asks,
                             "is_calibrating": is_calib, "anomaly_msg": anomaly_msg, "is_anomaly": is_anomaly,
                             "total_bid_rubles": cur_bid_rub, "total_ask_rubles": cur_ask_rub,
-                            "total_volume": cur_bid_rub + cur_ask_rub, "current_price": cur_price
+                            "total_volume": cur_bid_rub + cur_ask_rub, "current_price": cur_price,
+                            "dynamic_whale_bid": dynamic_whale_bid,
+                            "dynamic_whale_ask": dynamic_whale_ask
                         }
         except Exception as e:
             print(f"Потеряно соединение. Переподключение... Ошибка: {e}")
@@ -127,17 +195,19 @@ def real_market_page(request):
     return render(request, "real_market.html")
 
 
+def portfolio_page(request):
+    return render(request, "portfolio.html")
+
+
 def api_real_data(request):
     global ACTIVE_FIGI, STREAM_THREAD
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
     figi = request.GET.get('figi', 'BBG004730N88')
-
     if ACTIVE_FIGI != figi:
         ACTIVE_FIGI = figi
         GLOBAL_DATA[figi] = {"status": "loading", "message": "Подключение к бирже..."}
         STREAM_THREAD = threading.Thread(target=start_stream_in_thread, args=(figi,), daemon=True)
         STREAM_THREAD.start()
-
     return JsonResponse(GLOBAL_DATA.get(figi, {"status": "loading", "message": "Инициализация..."}))
 
 
@@ -187,10 +257,6 @@ def api_history_data(request):
         return JsonResponse({"status": "error", "message": str(e)})
 
 
-def portfolio_page(request):
-    return render(request, "portfolio.html")
-
-
 def api_portfolio_data(request):
     if not INVEST_TOKEN:
         return JsonResponse({"status": "error", "message": "Токен не найден!"})
@@ -201,7 +267,6 @@ def api_portfolio_data(request):
             if not accounts_response.accounts:
                 return JsonResponse({"status": "error", "message": "Счета не найдены!"})
 
-            # Берем первый активный счет
             account_id = accounts_response.accounts[0].id
             portfolio = client.operations.get_portfolio(account_id=account_id)
 
@@ -210,18 +275,14 @@ def api_portfolio_data(request):
             total_invested = 0.0
 
             for p in portfolio.positions:
-                # Безопасно переводим цены из Quotation в float (если данных нет, ставим 0.0)
                 qty = float(quotation_to_decimal(p.quantity)) if p.quantity else 0.0
                 avg_price = float(quotation_to_decimal(p.average_position_price)) if p.average_position_price else 0.0
                 curr_price = float(quotation_to_decimal(p.current_price)) if p.current_price else 0.0
-
-                # Доходность конкретной позиции в рублях
                 pos_yield_rub = float(quotation_to_decimal(p.expected_yield)) if p.expected_yield else 0.0
 
                 invested_sum = avg_price * qty
                 yield_percent = (pos_yield_rub / invested_sum * 100) if invested_sum > 0 else 0.0
 
-                # Суммируем для вычисления общего процента портфеля
                 total_yield_rub += pos_yield_rub
                 total_invested += invested_sum
 
@@ -236,7 +297,6 @@ def api_portfolio_data(request):
                     "total_sum": curr_price * qty
                 })
 
-            # Считаем честный общий процент по всему портфелю
             total_yield_percent = (total_yield_rub / total_invested * 100) if total_invested > 0 else 0.0
             total_portfolio_cost = float(
                 quotation_to_decimal(portfolio.total_amount_portfolio)) if portfolio.total_amount_portfolio else 0.0

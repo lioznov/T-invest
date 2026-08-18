@@ -126,3 +126,13 @@ td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(0,0,0,0.
 .summary-item div:first-child { color: var(--text-gray); font-size: 14px; margin-bottom: 8px; font-weight: 500; }
 .summary-value { font-size: 32px; font-weight: bold; color: var(--text-dark); }
 .chart-card { display: flex; align-items: center; justify-content: center; height: 250px; }
+
+
+/* ВИЗУАЛЬНЫЙ ДЕТЕКТОР ПЛИТ (КИТЫ) */
+.whale-row {
+    font-weight: bold !important;
+}
+.whale-row td {
+    background: #ffd60a !important; /* Эта команда ПРОБИВАЕТ градиенты */
+    color: #000 !important;         /* Черный текст */
+}
