@@ -10,10 +10,17 @@
 <div class="controls-bar panel">
     <div class="stock-info">
         <div class="stock-icon" id="iconTicker">S</div>
-        <div class="stock-name" id="displayTicker">BBG004730N88</div>
+        <div class="stock-name" id="displayTicker">SBER</div>
     </div>
     <div class="controls">
-        <input type="text" id="figiInput" value="BBG004730N88" placeholder="FIGI...">
+
+        <!-- УМНЫЙ ПОИСК -->
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" class="search-input" placeholder="Поиск (тикер, имя)..." autocomplete="off" oninput="debounceSearch()">
+            <input type="hidden" id="figiInput" value="BBG004730N88">
+            <div id="searchDropdown" class="search-dropdown"></div>
+        </div>
 
         <select id="timeframeSelect" onchange="changeTimeframe()">
             <optgroup label="Секунды">
@@ -43,14 +50,11 @@
         </select>
 
         <select id="depthSelect" onchange="changeDepth()">
-            <option value="10" selected>10 строк</option>
+            <option value="10">10 строк</option>
             <option value="20">20 строк</option>
             <option value="30">30 строк</option>
-            <option value="40">40 строк</option>
-            <option value="50" selected>50 строк</option> <!-- Теперь по умолчанию открывается 50 строк! -->
+            <option value="50" selected>50 строк</option>
         </select>
-
-        <button onclick="startTracking()">Открыть график</button>
     </div>
 </div>
 
@@ -63,16 +67,23 @@
 
     <div class="panel panel-book">
         <div class="volumes-header">
-            <div>Покупки: <br><span id="totalBids" class="vol-buy">0 ₽</span></div>
-            <div style="text-align: center;">Емкость: <br><span id="totalVolume" class="vol-total">0 ₽</span></div>
-            <div style="text-align: right;">Продажи: <br><span id="totalAsks" class="vol-sell">0 ₽</span></div>
+            <div class="vol-buy" id="totalBids">0 ₽</div>
+            <div class="vol-total" id="totalVolume" style="font-size: 12px; color: var(--text-gray);">0 ₽</div>
+            <div class="vol-sell" id="totalAsks">0 ₽</div>
         </div>
 
-        <table>
-            <thead><tr><th class="right-align">Объем</th><th class="right-align">Цена ₽</th></tr></thead>
-            <tbody id="asksBody"></tbody>
-            <tbody><tr><td colspan="2" style="text-align: center; padding: 10px 0; color: var(--text-gray);">--- Спред ---</td></tr></tbody>
-            <tbody id="bidsBody"></tbody>
+        <table class="orderbook-table">
+            <thead>
+                <tr>
+                    <th class="col-bid-price">Покупка, ₽</th>
+                    <th class="col-bid-vol">Объем</th>
+                    <th class="col-ask-vol">Объем</th>
+                    <th class="col-ask-price">Продажа, ₽</th>
+                </tr>
+            </thead>
+            <tbody id="orderbookBody">
+                <!-- Сюда вставляются строки -->
+            </tbody>
         </table>
     </div>
 </div>
@@ -81,24 +92,71 @@
     const LOT_SIZE = 10;
     let trackerInterval = null, chart = null, candleSeries = null;
     let currentHistoricalCandle = null, isFetching = false, isChartBroken = false;
-    let currentDepth = 50; // Переключили по умолчанию на 50
+    let currentDepth = 50;
+    let searchTimeout = null;
+
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(performSearch, 500);
+    }
+
+    function performSearch() {
+        const query = document.getElementById('searchInput').value;
+        const dropdown = document.getElementById('searchDropdown');
+
+        if (query.length < 2) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        fetch(`/api/search/?q=${query}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok' && data.results.length > 0) {
+                    dropdown.innerHTML = '';
+                    data.results.forEach(item => {
+                        dropdown.innerHTML += `
+                            <div class="search-item" onclick="selectInstrument('${item.figi}', '${item.ticker}', '${item.name}')">
+                                <span class="search-item-ticker">${item.ticker} (${item.type})</span>
+                                <span class="search-item-name">${item.name}</span>
+                            </div>
+                        `;
+                    });
+                    dropdown.style.display = 'block';
+                } else {
+                    dropdown.innerHTML = '<div class="search-item"><span class="search-item-name">Ничего не найдено</span></div>';
+                    dropdown.style.display = 'block';
+                }
+            });
+    }
+
+    function selectInstrument(figi, ticker, name) {
+        document.getElementById('figiInput').value = figi;
+        document.getElementById('searchInput').value = ticker;
+        document.getElementById('searchDropdown').style.display = 'none';
+
+        document.getElementById('displayTicker').innerText = ticker;
+        document.getElementById('iconTicker').innerText = ticker.charAt(0).toUpperCase();
+
+        startTracking(); // Перезапускаем поток с новой акцией
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!document.getElementById('searchInput').contains(e.target)) {
+            document.getElementById('searchDropdown').style.display = 'none';
+        }
+    });
 
     function initChart() {
         const container = document.getElementById('chart-container');
-        if (typeof LightweightCharts === 'undefined') {
-            isChartBroken = true;
-            container.innerHTML = "Ошибка: библиотека графиков не загрузилась.";
-            return;
-        }
+        if (typeof LightweightCharts === 'undefined') { isChartBroken = true; return; }
         container.innerHTML = '';
-
         chart = LightweightCharts.createChart(container, {
             autoSize: true,
             layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#4b5563' },
             grid: { vertLines: { color: 'rgba(0,0,0,0.05)' }, horzLines: { color: 'rgba(0,0,0,0.05)' } },
             timeScale: { timeVisible: true, secondsVisible: true },
         });
-
         candleSeries = chart.addCandlestickSeries({
             upColor: '#059669', downColor: '#dc2626', borderVisible: false,
             wickUpColor: '#059669', wickDownColor: '#dc2626'
@@ -118,19 +176,9 @@
             });
     }
 
-    function changeTimeframe() {
-        const tf = document.getElementById('timeframeSelect').value;
-        const figi = document.getElementById('figiInput').value;
-        fetchHistory(figi, tf);
-    }
-
-    function changeDepth() {
-        currentDepth = parseInt(document.getElementById('depthSelect').value);
-    }
-
-    function formatMillions(rubles) {
-        return (rubles / 1_000_000).toFixed(1) + 'М ₽';
-    }
+    function changeTimeframe() { fetchHistory(document.getElementById('figiInput').value, document.getElementById('timeframeSelect').value); }
+    function changeDepth() { currentDepth = parseInt(document.getElementById('depthSelect').value); }
+    function formatMillions(rubles) { return (rubles / 1_000_000).toFixed(1) + 'М ₽'; }
 
     function fetchRealData() {
         if (isFetching) return;
@@ -142,7 +190,15 @@
         fetch(`/api/real-data/?figi=${figi}`)
             .then(res => res.json())
             .then(data => {
-                if (data.status === "error" || data.status === "loading") return;
+                // Если статус loading, значит Питону нужно еще пару секунд на подключение к бирже
+                if (data.status === "loading") {
+                    isFetching = false;
+                    return;
+                }
+                if (data.status === "error") {
+                    isFetching = false;
+                    return;
+                }
 
                 if (data.is_calibrating) {
                     alertBox.className = 'alert-box alert-calibrating';
@@ -157,7 +213,7 @@
 
                 document.getElementById('totalBids').innerText = formatMillions(data.total_bid_rubles);
                 document.getElementById('totalAsks').innerText = formatMillions(data.total_ask_rubles);
-                document.getElementById('totalVolume').innerText = formatMillions(data.total_volume);
+                document.getElementById('totalVolume').innerText = "ОБЩИЙ ОБЪЕМ: " + formatMillions(data.total_volume);
 
                 if (!isChartBroken && data.current_price > 0 && candleSeries && currentHistoricalCandle) {
                     currentHistoricalCandle.close = data.current_price;
@@ -166,57 +222,73 @@
                     candleSeries.update(currentHistoricalCandle);
                 }
 
-                let maxVolume = 0;
                 let visibleAsks = data.asks.slice(0, currentDepth);
                 let visibleBids = data.bids.slice(0, currentDepth);
+
+                let maxVolume = 0;
                 visibleAsks.forEach(a => { if (a.quantity > maxVolume) maxVolume = a.quantity; });
                 visibleBids.forEach(b => { if (b.quantity > maxVolume) maxVolume = b.quantity; });
                 if (maxVolume === 0) maxVolume = 1;
 
-                // Получаем АДАПТИВНЫЕ пороги от бэкенда
                 const threshBid = data.dynamic_whale_bid || 100000000;
                 const threshAsk = data.dynamic_whale_ask || 100000000;
 
-                const asksBody = document.getElementById('asksBody');
-                const bidsBody = document.getElementById('bidsBody');
+                const tbody = document.getElementById('orderbookBody');
+                tbody.innerHTML = '';
 
-                // === ЯДЕРНЫЙ ВАРИАНТ ПОДСВЕТКИ (Без CSS файла) ===
-                asksBody.innerHTML = '';
-                [...visibleAsks].reverse().forEach(ask => {
-                    const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= threshAsk;
-                    const fillPercent = (ask.quantity / maxVolume) * 100;
+                const rowCount = Math.max(visibleBids.length, visibleAsks.length);
 
-                    const bg = isWhale ? '#ffd60a' : `linear-gradient(to left, rgba(220, 38, 38, 0.15) ${fillPercent}%, transparent ${fillPercent}%)`;
-                    const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
+                for (let i = 0; i < rowCount; i++) {
+                    const bid = visibleBids[i];
+                    const ask = visibleAsks[i];
 
-                    asksBody.innerHTML += `
-                        <tr style="${isWhale ? 'background-color: #ffd60a;' : ''}">
-                            <td class="right-align" style="background: ${bg}; ${textStyle}">${ask.quantity}</td>
-                            <td class="${isWhale ? 'right-align' : 'ask-price right-align'}" style="background: ${bg}; ${textStyle}">${ask.price.toFixed(2)}</td>
-                        </tr>`;
-                });
+                    let trHtml = '<tr>';
 
-                bidsBody.innerHTML = '';
-                visibleBids.forEach(bid => {
-                    const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= threshBid;
-                    const fillPercent = (bid.quantity / maxVolume) * 100;
+                    if (bid) {
+                        const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= threshBid;
+                        const fillPercent = (bid.quantity / maxVolume) * 100;
+                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to left, rgba(5, 150, 105, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
+                        const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
 
-                    const bg = isWhale ? '#ffd60a' : `linear-gradient(to left, rgba(5, 150, 105, 0.15) ${fillPercent}%, transparent ${fillPercent}%)`;
-                    const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
+                        trHtml += `
+                            <td class="col-bid-price bid-price" style="${textStyle} ${isWhale ? 'background-color:#ffd60a;' : ''}">${bid.price.toFixed(2)}</td>
+                            <td class="col-bid-vol" style="background: ${bg}; ${textStyle}">${bid.quantity}</td>
+                        `;
+                    } else {
+                        trHtml += `<td colspan="2"></td>`;
+                    }
 
-                    bidsBody.innerHTML += `
-                        <tr style="${isWhale ? 'background-color: #ffd60a;' : ''}">
-                            <td class="right-align" style="background: ${bg}; ${textStyle}">${bid.quantity}</td>
-                            <td class="${isWhale ? 'right-align' : 'bid-price right-align'}" style="background: ${bg}; ${textStyle}">${bid.price.toFixed(2)}</td>
-                        </tr>`;
-                });
+                    if (ask) {
+                        const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= threshAsk;
+                        const fillPercent = (ask.quantity / maxVolume) * 100;
+                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to right, rgba(220, 38, 38, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
+                        const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
+
+                        trHtml += `
+                            <td class="col-ask-vol" style="background: ${bg}; ${textStyle}">${ask.quantity}</td>
+                            <td class="col-ask-price ask-price" style="${textStyle} ${isWhale ? 'background-color:#ffd60a;' : ''}">${ask.price.toFixed(2)}</td>
+                        `;
+                    } else {
+                        trHtml += `<td colspan="2"></td>`;
+                    }
+
+                    trHtml += '</tr>';
+                    tbody.innerHTML += trHtml;
+                }
+
             }).finally(() => { isFetching = false; });
     }
 
     function startTracking() {
         if (trackerInterval) clearInterval(trackerInterval);
         const figi = document.getElementById('figiInput').value;
-        document.getElementById('displayTicker').innerText = figi;
+
+        // === ВИЗУАЛЬНАЯ ОЧИСТКА ПРИ ПЕРЕКЛЮЧЕНИИ ===
+        document.getElementById('orderbookBody').innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-gray);">Подключение к потоку биржи...</td></tr>';
+        document.getElementById('totalBids').innerText = '0 ₽';
+        document.getElementById('totalAsks').innerText = '0 ₽';
+        document.getElementById('totalVolume').innerText = 'ОБЩИЙ ОБЪЕМ: 0 ₽';
+
         initChart();
         fetchHistory(figi, document.getElementById('timeframeSelect').value);
         fetchRealData();
