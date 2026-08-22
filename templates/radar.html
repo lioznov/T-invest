@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block nav_radar %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Стили для переключателя бота (скопировано из главного терминала) */
+    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--primary); }
+    input:focus + .slider { box-shadow: 0 0 1px var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    /* Сетка радаров */
+    .radar-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .mini-card {
+        background: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+        position: relative;
+    }
+
+    .mini-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+    }
+
+    .mini-ticker { font-size: 18px; font-weight: bold; color: var(--primary); }
+    .mini-price { font-size: 16px; font-weight: 600; color: var(--text-dark); }
+
+    .remove-btn {
+        background: none; border: none; color: #dc2626; cursor: pointer;
+        font-weight: bold; padding: 0 5px;
+    }
+    .remove-btn:hover { background: #fee2e2; border-radius: 4px; }
+
+    .mini-alert {
+        font-size: 12px; font-weight: 600; padding: 5px; border-radius: 6px;
+        text-align: center; margin-bottom: 10px;
+    }
+    .alert-ok { background: #f3f4f6; color: #6b7280; }
+    .alert-danger { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+
+    .mini-book { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .mini-book th { color: #888; font-weight: 400; padding-bottom: 4px; border-bottom: 1px solid #eee; }
+    .mini-book td { padding: 4px 2px; }
+    .col-vol { width: 50%; }
+    .col-pr { width: 50%; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="panel controls-bar" style="margin-top: 20px;">
+    <div>
+        <h3 style="margin: 0; color: var(--text-dark);">⚡ Мульти-Радар</h3>
+        <p style="margin: 5px 0 0 0; font-size: 13px; color: var(--text-gray);">Отслеживание пробоев сразу по списку активов</p>
+    </div>
+
+    <div style="display: flex; gap: 15px; align-items: center;">
+
+        <!-- Переключатель Телеграм Мульти-Бота -->
+        <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);">
+            <label for="multiBotToggle" style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-dark);">🤖 Мульти-Бот</label>
+            <label class="switch">
+                <input type="checkbox" id="multiBotToggle" onchange="updateMultiBotState()">
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" class="search-input" placeholder="Добавить акцию на радар..." autocomplete="off" oninput="debounceSearch()">
+            <div id="searchDropdown" class="search-dropdown"></div>
+        </div>
+
+    </div>
+</div>
+
+<div id="radarGrid" class="radar-grid">
+    <!-- Сюда вставляются карточки мини-стаканов -->
+</div>
+
+<script>
+    const LOT_SIZE = 10;
+    let searchTimeout = null;
+
+    // Память переключателя Мульти-Бота
+    let isMultiBotEnabled = localStorage.getItem('investpro_multibot_enabled') === 'true';
+    // Память списка акций (НАДЕЖНЫЙ ИСТОЧНИК)
+    let savedRadars = JSON.parse(localStorage.getItem('investpro_saved_radars') || '[]');
+
+    function updateMultiBotState() {
+        isMultiBotEnabled = document.getElementById('multiBotToggle').checked;
+        localStorage.setItem('investpro_multibot_enabled', isMultiBotEnabled);
+    }
+
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(performSearch, 300);
+    }
+
+    function performSearch() {
+        const query = document.getElementById('searchInput').value;
+        const dropdown = document.getElementById('searchDropdown');
+
+        if (query.length < 2) { dropdown.style.display = 'none'; return; }
+
+        fetch(`/api/search/?q=${query}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok' && data.results.length > 0) {
+                    dropdown.innerHTML = '';
+                    data.results.forEach(item => {
+                        dropdown.innerHTML += `
+                            <div class="search-item" onclick="addInstrument('${item.figi}', '${item.ticker}')">
+                                <span class="search-item-ticker">${item.ticker} (${item.type})</span>
+                                <span class="search-item-name">${item.name}</span>
+                            </div>
+                        `;
+                    });
+                    dropdown.style.display = 'block';
+                }
+            });
+    }
+
+    function addInstrument(figi, ticker) {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchDropdown').style.display = 'none';
+
+        if (!savedRadars.some(r => r.figi === figi)) {
+            savedRadars.push({figi, ticker});
+            localStorage.setItem('investpro_saved_radars', JSON.stringify(savedRadars));
+        }
+        fetchRadarData();
+    }
+
+    function removeInstrument(figi) {
+        savedRadars = savedRadars.filter(r => r.figi !== figi);
+        localStorage.setItem('investpro_saved_radars', JSON.stringify(savedRadars));
+        fetchRadarData();
+    }
+
+    function fetchRadarData() {
+        // Передаем весь список акций на сервер, чтобы он синхронизировался с браузером!
+        const syncStr = savedRadars.map(r => `${r.figi}:${r.ticker}`).join(',');
+
+        fetch(`/api/radar-data/?bot=${isMultiBotEnabled}&sync=${syncStr}`)
+            .then(res => res.json())
+            .then(resp => {
+                if (resp.status !== 'ok') return;
+
+                const grid = document.getElementById('radarGrid');
+                grid.innerHTML = '';
+
+                for (const [figi, data] of Object.entries(resp.data)) {
+                    if (data.status === 'loading') {
+                        grid.innerHTML += `
+                            <div class="mini-card" style="opacity: 0.7;">
+                                <div class="mini-header">
+                                    <span class="mini-ticker">${data.ticker}</span>
+                                    <span class="mini-price">... ₽</span>
+                                    <button class="remove-btn" onclick="removeInstrument('${figi}')">✕</button>
+                                </div>
+                                <div class="mini-alert alert-ok">Подключение к бирже...</div>
+                            </div>
+                        `;
+                        continue;
+                    }
+
+                    let visibleAsks = data.asks.slice(0, 7).reverse();
+                    let visibleBids = data.bids.slice(0, 7);
+
+                    let maxVol = 1;
+                    visibleAsks.forEach(a => maxVol = Math.max(maxVol, a.quantity));
+                    visibleBids.forEach(b => maxVol = Math.max(maxVol, b.quantity));
+
+                    let asksHtml = '';
+                    visibleAsks.forEach(ask => {
+                        const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= (data.dynamic_whale_ask || 100000000);
+                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to right, rgba(220,38,38,0.2) ${(ask.quantity/maxVol)*100}%, transparent 0%)`;
+                        const textStyle = isWhale ? 'font-weight:bold; color:#000;' : 'color: #dc2626;';
+                        asksHtml += `<tr>
+                            <td class="col-pr" style="text-align:left; ${textStyle}">${ask.price.toFixed(2)}</td>
+                            <td class="col-vol" style="text-align:right; background:${bg}; ${textStyle}">${ask.quantity}</td>
+                        </tr>`;
+                    });
+
+                    let bidsHtml = '';
+                    visibleBids.forEach(bid => {
+                        const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= (data.dynamic_whale_bid || 100000000);
+                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to right, rgba(5,150,105,0.2) ${(bid.quantity/maxVol)*100}%, transparent 0%)`;
+                        const textStyle = isWhale ? 'font-weight:bold; color:#000;' : 'color: #059669;';
+                        bidsHtml += `<tr>
+                            <td class="col-pr" style="text-align:left; ${textStyle}">${bid.price.toFixed(2)}</td>
+                            <td class="col-vol" style="text-align:right; background:${bg}; ${textStyle}">${bid.quantity}</td>
+                        </tr>`;
+                    });
+
+                    let alertClass = data.is_anomaly ? 'alert-danger' : 'alert-ok';
+                    let alertText = data.is_anomaly ? data.anomaly_msg : 'Спокойный рынок';
+                    if (data.is_calibrating) { alertClass = 'alert-ok'; alertText = 'Калибровка...'; }
+
+                    const cardHtml = `
+                        <div class="mini-card">
+                            <div class="mini-header">
+                                <span class="mini-ticker">${data.ticker}</span>
+                                <span class="mini-price">${data.current_price.toFixed(2)} ₽</span>
+                                <button class="remove-btn" onclick="removeInstrument('${figi}')" title="Убрать с радара">✕</button>
+                            </div>
+                            <div class="mini-alert ${alertClass}">${alertText}</div>
+                            <table class="mini-book">
+                                <thead><tr><th style="text-align:left;">Цена</th><th style="text-align:right;">Объем</th></tr></thead>
+                                <tbody>
+                                    ${asksHtml}
+                                    <tr><td colspan="2" style="border-bottom: 2px solid #ccc; height:2px; padding:0;"></td></tr>
+                                    ${bidsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    grid.innerHTML += cardHtml;
+                }
+            });
+    }
+
+    window.onload = () => {
+        document.getElementById('multiBotToggle').checked = isMultiBotEnabled;
+        fetchRadarData();
+        setInterval(fetchRadarData, 1000);
+    };
+
+    document.addEventListener('click', function(e) {
+        if (!document.getElementById('searchInput').contains(e.target)) {
+            document.getElementById('searchDropdown').style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

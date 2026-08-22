@@ -12,4 +12,8 @@ urlpatterns = [
 
     # === НОВЫЙ МАРШРУТ ДЛЯ ПОИСКА ===
     path('api/search/', views.api_search, name='api_search'),
+    path('radar/', views.radar_page, name='radar'),
+    path('api/radar-data/', views.api_radar_data, name='api_radar_data'),
+    path('api/radar-add/', views.api_radar_add, name='api_radar_add'),
+    path('api/radar-remove/', views.api_radar_remove, name='api_radar_remove'),
 ]

@@ -26,10 +26,16 @@
             <div class="logo"><strong>ИНВЕСТ</strong>ПРО</div>
 
             <!-- Центральный блок: Навигация -->
-            <div class="nav-links">
-                <a href="/" class="nav-item {% block nav_terminal %}{% endblock %}">Терминал</a>
-                <a href="/portfolio/" class="nav-item {% block nav_portfolio %}{% endblock %}">Портфель</a>
-            </div>
+                <div class="nav-links">
+                    <!-- Твой текущий терминал (один стакан + график) -->
+                    <a href="/" class="nav-item {% block nav_terminal %}{% endblock %}">Терминал</a>
+
+                    <!-- НОВАЯ ССЫЛКА НА ГАЛЕРЕЮ СТАКАНОВ -->
+                    <a href="/radar/" class="nav-item {% block nav_radar %}{% endblock %}">Радар</a>
+
+                    <!-- Твой портфель -->
+                    <a href="/portfolio/" class="nav-item {% block nav_portfolio %}{% endblock %}">Портфель</a>
+                </div>
 
             <!-- Правый блок: Профиль (создает баланс для центровки) -->
             <div class="user-profile">

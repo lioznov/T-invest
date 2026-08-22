@@ -34,15 +34,58 @@ TG_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 INVEST_TOKEN = os.getenv("INVEST_TOKEN")
 
-GLOBAL_DATA = {}
-ACTIVE_FIGI = None
-STREAM_THREAD = None
 LOT_SIZE = 10
 ANOMALY_MULTIPLIER = 3.0
 
-# Глобальный флаг для управления алертами бота
+# === 1. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ОДИНОЧНОГО РАДАРА ===
+GLOBAL_DATA = {}
+ACTIVE_FIGI = None
+STREAM_THREAD = None
 BOT_ALERTS_ENABLED = False
 PREV_BOT_STATE = False
+
+# === 2. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ МУЛЬТИ-РАДАРА ===
+MULTI_GLOBAL_DATA = {}
+TRACKED_FIGIS = set()
+TICKER_CACHE = {}
+MULTI_STREAM_THREAD = None
+MULTI_BOT_ALERTS_ENABLED = False
+PREV_MULTI_BOT_STATE = False
+
+# === 3. ФОНОВЫЙ КЭШ ПОИСКА (ДЛЯ ТУРБО-СКОРОСТИ) ===
+CACHED_INSTRUMENTS = []
+CACHE_READY = False
+
+
+def _load_cache():
+    """Скачивает тикеры один раз при запуске сервера, чтобы поиск работал моментально"""
+    global CACHED_INSTRUMENTS, CACHE_READY
+    if not INVEST_TOKEN: return
+    try:
+        with Client(INVEST_TOKEN) as client:
+            shares = client.instruments.shares().instruments
+            etfs = client.instruments.etfs().instruments
+            currencies = client.instruments.currencies().instruments
+
+            temp_cache = []
+            for inst in shares + etfs + currencies:
+                if getattr(inst, 'api_trade_available_flag', False):
+                    temp_cache.append({
+                        'figi': inst.figi,
+                        'ticker': inst.ticker,
+                        'name': inst.name,
+                        'type': inst.instrument_type,
+                        'class_code': getattr(inst, 'class_code', '')
+                    })
+            CACHED_INSTRUMENTS = temp_cache
+            CACHE_READY = True
+            print(f"✅ Кэш поиска загружен: {len(CACHED_INSTRUMENTS)} инструментов.")
+    except Exception as e:
+        print(f"Ошибка загрузки кэша поиска: {e}")
+
+
+# Запускаем загрузку кэша в фоне, чтобы не вешать сервер
+threading.Thread(target=_load_cache, daemon=True).start()
 
 
 def send_telegram_message(message):
@@ -55,6 +98,9 @@ def send_telegram_message(message):
         pass
 
 
+# =========================================================================
+# === ЛОГИКА ОДИНОЧНОГО РАДАРА (real_market.html) ===
+# =========================================================================
 def start_stream_in_thread(figi):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -114,8 +160,7 @@ async def stream_data(figi):
 
                         alerts_to_send = []
                         prices_to_remove = []
-                        dynamic_whale_bid = 100_000_000
-                        dynamic_whale_ask = 100_000_000
+                        dynamic_whale_bid, dynamic_whale_ask = 100_000_000, 100_000_000
 
                         if not is_calib:
                             med_bid = statistics.median(history_bids)
@@ -126,52 +171,37 @@ async def stream_data(figi):
 
                             if cur_bid_rub > (med_bid * ANOMALY_MULTIPLIER):
                                 alerts_to_send.append(
-                                    f"🌊 <b>КАСКАД ПОКУПОК!</b>\nОбъем вырос в 3 раза: {cur_bid_rub / 1_000_000:.1f}М ₽")
+                                    f"🌊 <b>[ОДИНОЧНЫЙ РАДАР] КАСКАД ПОКУПОК!</b>\nОбъем вырос в 3 раза: {cur_bid_rub / 1_000_000:.1f}М ₽")
                             elif cur_ask_rub > (med_ask * ANOMALY_MULTIPLIER):
                                 alerts_to_send.append(
-                                    f"🌊 <b>КАСКАД ПРОДАЖ!</b>\nОбъем вырос в 3 раза: {cur_ask_rub / 1_000_000:.1f}М ₽")
+                                    f"🌊 <b>[ОДИНОЧНЫЙ РАДАР] КАСКАД ПРОДАЖ!</b>\nОбъем вырос в 3 раза: {cur_ask_rub / 1_000_000:.1f}М ₽")
 
-                            # Умный алгоритм вычисления пробоев
                             for price, data in list(active_whales.items()):
                                 w_type = data['type']
                                 initial_vol = data.get('initial_vol', data['vol'])
                                 pre_alert_sent = data.get('pre_alert_sent', False)
 
-                                if w_type == 'bid':
-                                    current_vol = bids_dict.get(price, 0) * price * LOT_SIZE
-                                    percent_left = (current_vol / initial_vol) * 100 if initial_vol > 0 else 0
+                                current_vol = (bids_dict.get(price, 0) if w_type == 'bid' else asks_dict.get(price,
+                                                                                                             0)) * price * LOT_SIZE
+                                percent_left = (current_vol / initial_vol) * 100 if initial_vol > 0 else 0
+                                threshold = dynamic_whale_bid if w_type == 'bid' else dynamic_whale_ask
 
-                                    if 0 < percent_left <= 25 and not pre_alert_sent:
+                                if 0 < percent_left <= 25 and not pre_alert_sent:
+                                    alerts_to_send.append(
+                                        f"⚠️ <b>[ОДИНОЧНЫЙ РАДАР] ГОТОВЬСЯ! ПРОБОЙ {'ВНИЗ' if w_type == 'bid' else 'ВВЕРХ'}!</b>\n"
+                                        f"Плиту на {price} ₽ доедают!\nОсталось: {current_vol / 1_000_000:.1f}М ₽ ({percent_left:.1f}%)"
+                                    )
+                                    active_whales[price]['pre_alert_sent'] = True
+
+                                if current_vol < threshold:
+                                    is_eaten = (cur_price <= price) if w_type == 'bid' else (cur_price >= price)
+                                    if pre_alert_sent or is_eaten:
                                         alerts_to_send.append(
-                                            f"⚠️ <b>ГОТОВЬСЯ! ПРОБОЙ ВНИЗ!</b>\nПлиту покупателя на {price} ₽ доедают!\nОсталось: {current_vol / 1_000_000:.1f}М ₽ ({percent_left:.1f}%)")
-                                        active_whales[price]['pre_alert_sent'] = True
-
-                                    if current_vol < dynamic_whale_bid:
-                                        if pre_alert_sent or cur_price <= price:
-                                            alerts_to_send.append(
-                                                f"📉 <b>ПРОБОЙ ВНИЗ!</b>\nПлиту покупателя на {price} ₽ сожрали!")
-                                        else:
-                                            alerts_to_send.append(
-                                                f"👻 <b>СПУФИНГ!</b>\nПлита покупателя на {price} ₽ пропала.")
-                                        prices_to_remove.append(price)
-
-                                elif w_type == 'ask':
-                                    current_vol = asks_dict.get(price, 0) * price * LOT_SIZE
-                                    percent_left = (current_vol / initial_vol) * 100 if initial_vol > 0 else 0
-
-                                    if 0 < percent_left <= 25 and not pre_alert_sent:
+                                            f"{'📉' if w_type == 'bid' else '🚀'} <b>[ОДИНОЧНЫЙ РАДАР] ПРОБОЙ {'ВНИЗ' if w_type == 'bid' else 'ВВЕРХ'}!</b>\nПлиту на {price} ₽ сожрали!")
+                                    else:
                                         alerts_to_send.append(
-                                            f"⚠️ <b>ГОТОВЬСЯ! ПРОБОЙ ВВЕРХ!</b>\nПлиту продавца на {price} ₽ доедают!\nОсталось: {current_vol / 1_000_000:.1f}М ₽ ({percent_left:.1f}%)")
-                                        active_whales[price]['pre_alert_sent'] = True
-
-                                    if current_vol < dynamic_whale_ask:
-                                        if pre_alert_sent or cur_price >= price:
-                                            alerts_to_send.append(
-                                                f"🚀 <b>ПРОБОЙ ВВЕРХ!</b>\nПлиту продавца на {price} ₽ сожрали!")
-                                        else:
-                                            alerts_to_send.append(
-                                                f"👻 <b>СПУФИНГ!</b>\nПлита продавца на {price} ₽ пропала.")
-                                        prices_to_remove.append(price)
+                                            f"👻 <b>[ОДИНОЧНЫЙ РАДАР] СПУФИНГ!</b>\nПлита на {price} ₽ пропала.")
+                                    prices_to_remove.append(price)
 
                             for p in prices_to_remove:
                                 del active_whales[p]
@@ -182,7 +212,7 @@ async def stream_data(figi):
                                     active_whales[price] = {'type': 'bid', 'vol': vol, 'initial_vol': vol,
                                                             'pre_alert_sent': False}
                                     alerts_to_send.append(
-                                        f"🟢 <b>ПЛИТА (Покупка)</b>\nЦена: {price} ₽\nЛоты: <b>{qty} шт.</b>\nСумма: {vol / 1_000_000:.1f}М ₽")
+                                        f"🟢 <b>[ОДИНОЧНЫЙ РАДАР] Покупка</b>\nЦена: {price} ₽\nЛоты: {qty} шт.\nСумма: {vol / 1_000_000:.1f}М ₽")
 
                             for price, qty in asks_dict.items():
                                 vol = price * qty * LOT_SIZE
@@ -190,16 +220,16 @@ async def stream_data(figi):
                                     active_whales[price] = {'type': 'ask', 'vol': vol, 'initial_vol': vol,
                                                             'pre_alert_sent': False}
                                     alerts_to_send.append(
-                                        f"🔴 <b>ПЛИТА (Продажа)</b>\nЦена: {price} ₽\nЛоты: <b>{qty} шт.</b>\nСумма: {vol / 1_000_000:.1f}М ₽")
+                                        f"🔴 <b>[ОДИНОЧНЫЙ РАДАР] Продажа</b>\nЦена: {price} ₽\nЛоты: {qty} шт.\nСумма: {vol / 1_000_000:.1f}М ₽")
 
                         anomaly_msg, is_anomaly = "", False
                         if alerts_to_send:
                             anomaly_msg = alerts_to_send[0].replace("\n", " ")
                             is_anomaly = True
 
-                            # Отправляем в Telegram только если галочка на сайте включена
                             if current_time - last_tg_alert > 10 and BOT_ALERTS_ENABLED:
-                                tg_msg = f"🔔 <b>АКЦИЯ: {figi}</b>\n\n" + "\n\n".join(alerts_to_send)
+                                ticker_name = TICKER_CACHE.get(figi, figi)
+                                tg_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
                                 await asyncio.to_thread(send_telegram_message, tg_msg)
                                 last_tg_alert = current_time
 
@@ -208,20 +238,191 @@ async def stream_data(figi):
                             "is_calibrating": is_calib, "anomaly_msg": anomaly_msg, "is_anomaly": is_anomaly,
                             "total_bid_rubles": cur_bid_rub, "total_ask_rubles": cur_ask_rub,
                             "total_volume": cur_bid_rub + cur_ask_rub, "current_price": cur_price,
-                            "dynamic_whale_bid": dynamic_whale_bid,
-                            "dynamic_whale_ask": dynamic_whale_ask
+                            "dynamic_whale_bid": dynamic_whale_bid, "dynamic_whale_ask": dynamic_whale_ask
                         }
         except Exception as e:
-            print(f"Ошибка потока: {e}")
+            print(f"Ошибка потока (real_market): {e}")
             if ACTIVE_FIGI == figi:
-                GLOBAL_DATA[figi] = {"status": "error", "message": "Инструмент не торгуется (выберите другой)"}
+                GLOBAL_DATA[figi] = {"status": "error", "message": "Инструмент не торгуется"}
                 await asyncio.sleep(3)
 
 
+# =========================================================================
+# === ЛОГИКА МУЛЬТИ-РАДАРА (radar.html) ===
+# =========================================================================
+def start_multi_stream_in_thread():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    while True:
+        try:
+            loop.run_until_complete(multi_stream_data())
+        except Exception as e:
+            print(f"Перезапуск мульти-потока: {e}")
+            time.sleep(3)
+
+
+async def multi_stream_data():
+    global MULTI_GLOBAL_DATA, TRACKED_FIGIS, MULTI_BOT_ALERTS_ENABLED
+    history_bids = collections.defaultdict(lambda: collections.deque(maxlen=30))
+    history_asks = collections.defaultdict(lambda: collections.deque(maxlen=30))
+    last_calib_time = collections.defaultdict(float)
+    active_whales = collections.defaultdict(dict)
+    last_tg_alert = collections.defaultdict(float)
+
+    while True:
+        # Если список пуст, ждем. Иначе биржа закроет соединение с ошибкой "No active subscriptions"
+        if not TRACKED_FIGIS:
+            await asyncio.sleep(1)
+            continue
+
+        try:
+            async with AsyncClient(INVEST_TOKEN) as client:
+                async def request_iterator():
+                    subscribed = set()
+                    while True:
+                        current_tracked = set(TRACKED_FIGIS)
+
+                        # Защита от обрыва: если юзер удалил все акции, подпишемся на фиктивный Сбер
+                        if not current_tracked:
+                            current_tracked = {'BBG004730N88'}
+
+                        to_sub = current_tracked - subscribed
+                        to_unsub = subscribed - current_tracked
+
+                        if to_unsub:
+                            yield MarketDataRequest(
+                                subscribe_order_book_request=SubscribeOrderBookRequest(
+                                    subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_UNSUBSCRIBE,
+                                    instruments=[OrderBookInstrument(figi=f, depth=50) for f in to_unsub]
+                                )
+                            )
+                        if to_sub:
+                            yield MarketDataRequest(
+                                subscribe_order_book_request=SubscribeOrderBookRequest(
+                                    subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
+                                    instruments=[OrderBookInstrument(figi=f, depth=50) for f in to_sub]
+                                )
+                            )
+                        subscribed = current_tracked
+                        await asyncio.sleep(1)
+
+                async for marketdata in client.market_data_stream.market_data_stream(request_iterator()):
+                    if marketdata.orderbook:
+                        ob = marketdata.orderbook
+                        figi = ob.figi
+
+                        # Пропускаем фиктивный Сбер, если его нет в списке
+                        if figi not in TRACKED_FIGIS:
+                            continue
+
+                        current_time = time.time()
+                        bids = [{"price": float(quotation_to_decimal(b.price)), "quantity": b.quantity} for b in
+                                ob.bids[:50]]
+                        asks = [{"price": float(quotation_to_decimal(a.price)), "quantity": a.quantity} for a in
+                                ob.asks[:50]]
+
+                        cur_bid_rub = sum(b['price'] * b['quantity'] * LOT_SIZE for b in bids)
+                        cur_ask_rub = sum(a['price'] * a['quantity'] * LOT_SIZE for a in asks)
+                        cur_price = (bids[0]['price'] + asks[0]['price']) / 2 if bids and asks else 0
+
+                        if current_time - last_calib_time[figi] >= 1.0:
+                            history_bids[figi].append(cur_bid_rub)
+                            history_asks[figi].append(cur_ask_rub)
+                            last_calib_time[figi] = current_time
+
+                        is_calib = len(history_bids[figi]) < 30
+                        bids_dict = {b['price']: b['quantity'] for b in bids}
+                        asks_dict = {a['price']: a['quantity'] for a in asks}
+
+                        alerts_to_send = []
+                        prices_to_remove = []
+                        dynamic_whale_bid, dynamic_whale_ask = 100_000_000, 100_000_000
+
+                        if not is_calib:
+                            med_bid = statistics.median(history_bids[figi])
+                            med_ask = statistics.median(history_asks[figi])
+                            dynamic_whale_bid = max(med_bid * 0.25, 2_000_000)
+                            dynamic_whale_ask = max(med_ask * 0.25, 2_000_000)
+
+                            if cur_bid_rub > (med_bid * ANOMALY_MULTIPLIER):
+                                alerts_to_send.append(
+                                    f"🌊 <b>[МУЛЬТИ-РАДАР] КАСКАД ПОКУПОК!</b>\nОбъем вырос: {cur_bid_rub / 1_000_000:.1f}М ₽")
+                            elif cur_ask_rub > (med_ask * ANOMALY_MULTIPLIER):
+                                alerts_to_send.append(
+                                    f"🌊 <b>[МУЛЬТИ-РАДАР] КАСКАД ПРОДАЖ!</b>\nОбъем вырос: {cur_ask_rub / 1_000_000:.1f}М ₽")
+
+                            for price, data in list(active_whales[figi].items()):
+                                w_type = data['type']
+                                initial_vol = data.get('initial_vol', data['vol'])
+                                pre_alert_sent = data.get('pre_alert_sent', False)
+
+                                current_vol = (bids_dict.get(price, 0) if w_type == 'bid' else asks_dict.get(price,
+                                                                                                             0)) * price * LOT_SIZE
+                                percent_left = (current_vol / initial_vol) * 100 if initial_vol > 0 else 0
+                                threshold = dynamic_whale_bid if w_type == 'bid' else dynamic_whale_ask
+
+                                if 0 < percent_left <= 25 and not pre_alert_sent:
+                                    alerts_to_send.append(
+                                        f"⚠️ <b>[МУЛЬТИ-РАДАР] ГОТОВЬСЯ! ПРОБОЙ {'ВНИЗ' if w_type == 'bid' else 'ВВЕРХ'}!</b>\nПлиту на {price} ₽ доедают! Осталось: {current_vol / 1_000_000:.1f}М ₽ ({percent_left:.1f}%)")
+                                    active_whales[figi][price]['pre_alert_sent'] = True
+
+                                if current_vol < threshold:
+                                    is_eaten = (cur_price <= price) if w_type == 'bid' else (cur_price >= price)
+                                    if pre_alert_sent or is_eaten:
+                                        alerts_to_send.append(
+                                            f"{'📉' if w_type == 'bid' else '🚀'} <b>[МУЛЬТИ-РАДАР] ПРОБОЙ {'ВНИЗ' if w_type == 'bid' else 'ВВЕРХ'}!</b>\nПлиту на {price} ₽ сожрали!")
+                                    prices_to_remove.append(price)
+
+                            for p in prices_to_remove:
+                                del active_whales[figi][p]
+
+                            # В Мульти-Радаре молча фиксируем новые плиты (без отправки спама)
+                            for price, qty in bids_dict.items():
+                                vol = price * qty * LOT_SIZE
+                                if vol >= dynamic_whale_bid and price not in active_whales[figi]:
+                                    active_whales[figi][price] = {'type': 'bid', 'vol': vol, 'initial_vol': vol,
+                                                                  'pre_alert_sent': False}
+
+                            for price, qty in asks_dict.items():
+                                vol = price * qty * LOT_SIZE
+                                if vol >= dynamic_whale_ask and price not in active_whales[figi]:
+                                    active_whales[figi][price] = {'type': 'ask', 'vol': vol, 'initial_vol': vol,
+                                                                  'pre_alert_sent': False}
+
+                        anomaly_msg, is_anomaly = "", False
+                        if alerts_to_send:
+                            anomaly_msg = alerts_to_send[0].replace("\n", " ")
+                            is_anomaly = True
+
+                            if current_time - last_tg_alert[figi] > 10 and MULTI_BOT_ALERTS_ENABLED:
+                                ticker_name = TICKER_CACHE.get(figi, figi)
+                                tg_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
+                                await asyncio.to_thread(send_telegram_message, tg_msg)
+                                last_tg_alert[figi] = current_time
+
+                        MULTI_GLOBAL_DATA[figi] = {
+                            "status": "ok", "ticker": TICKER_CACHE.get(figi, figi),
+                            "bids": bids, "asks": asks, "is_calibrating": is_calib,
+                            "anomaly_msg": anomaly_msg, "is_anomaly": is_anomaly,
+                            "total_bid_rubles": cur_bid_rub, "total_ask_rubles": cur_ask_rub,
+                            "total_volume": cur_bid_rub + cur_ask_rub, "current_price": cur_price,
+                            "dynamic_whale_bid": dynamic_whale_bid, "dynamic_whale_ask": dynamic_whale_ask
+                        }
+        except Exception as e:
+            print(f"Ошибка потока мульти-радара: {e}")
+            await asyncio.sleep(3)
+
+
+# =========================================================================
+# === ПРЕДСТАВЛЕНИЯ (VIEWS) ===
+# =========================================================================
 def real_market_page(request): return render(request, "real_market.html")
 
 
 def portfolio_page(request): return render(request, "portfolio.html")
+
+
+def radar_page(request): return render(request, "radar.html")
 
 
 def api_real_data(request):
@@ -229,21 +430,24 @@ def api_real_data(request):
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
 
     figi = request.GET.get('figi', 'BBG004730N88')
-
-    # Читаем состояние галочки из браузера
     bot_state = request.GET.get('bot', 'false') == 'true'
 
-    # === УМНАЯ ОТПРАВКА СООБЩЕНИЯ О СТАТУСЕ БОТА ===
+    if figi not in TICKER_CACHE:
+        try:
+            with Client(INVEST_TOKEN) as sync_client:
+                inst = sync_client.instruments.get_instrument_by(id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI,
+                                                                 id=figi, class_code="")
+                TICKER_CACHE[figi] = inst.instrument.ticker
+        except Exception:
+            TICKER_CACHE[figi] = figi
+
     if bot_state != PREV_BOT_STATE:
         if bot_state:
-            # Отправляем сообщение в отдельном потоке, чтобы не тормозить сервер
             threading.Thread(target=send_telegram_message,
-                             args=("🟢 <b>Радар ВКЛЮЧЕН</b>\nУведомления о пробоях активированы.",)).start()
+                             args=("🟢 <b>[ОДИНОЧНЫЙ РАДАР] ВКЛЮЧЕН</b>\nУведомления активированы.",)).start()
         else:
             threading.Thread(target=send_telegram_message,
-                             args=("🔴 <b>Радар ВЫКЛЮЧЕН</b>\nУведомления приостановлены.",)).start()
-
-        # Обновляем память
+                             args=("🔴 <b>[ОДИНОЧНЫЙ РАДАР] ВЫКЛЮЧЕН</b>\nУведомления приостановлены.",)).start()
         PREV_BOT_STATE = bot_state
 
     BOT_ALERTS_ENABLED = bot_state
@@ -257,13 +461,138 @@ def api_real_data(request):
     return JsonResponse(GLOBAL_DATA.get(figi, {"status": "loading", "message": "Инициализация..."}))
 
 
+def api_radar_data(request):
+    global MULTI_STREAM_THREAD, MULTI_BOT_ALERTS_ENABLED, PREV_MULTI_BOT_STATE
+    if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
+
+    if not MULTI_STREAM_THREAD:
+        MULTI_STREAM_THREAD = threading.Thread(target=start_multi_stream_in_thread, daemon=True)
+        MULTI_STREAM_THREAD.start()
+
+    # === ВОССТАНОВЛЕННАЯ ФУНКЦИЯ СИНХРОНИЗАЦИИ (ЧТОБЫ АКЦИИ НЕ СБРАСЫВАЛИСЬ) ===
+    sync_param = request.GET.get('sync')
+    if sync_param is not None:
+        frontend_figis = set()
+        if sync_param != "":
+            for pair in sync_param.split(','):
+                if ':' in pair:
+                    f, t = pair.split(':', 1)
+                    TRACKED_FIGIS.add(f)
+                    TICKER_CACHE[f] = t
+                    frontend_figis.add(f)
+                    if f not in MULTI_GLOBAL_DATA:
+                        MULTI_GLOBAL_DATA[f] = {"status": "loading", "ticker": t, "message": "Подключение..."}
+
+        to_remove = TRACKED_FIGIS - frontend_figis
+        for f in list(to_remove):
+            TRACKED_FIGIS.remove(f)
+            if f in MULTI_GLOBAL_DATA:
+                del MULTI_GLOBAL_DATA[f]
+
+    bot_state = request.GET.get('bot', 'false') == 'true'
+
+    if bot_state != PREV_MULTI_BOT_STATE:
+        if bot_state:
+            threading.Thread(target=send_telegram_message,
+                             args=("🟢 <b>[МУЛЬТИ-РАДАР] ВКЛЮЧЕН</b>\nГалерея активирована.",)).start()
+        else:
+            threading.Thread(target=send_telegram_message,
+                             args=("🔴 <b>[МУЛЬТИ-РАДАР] ВЫКЛЮЧЕН</b>\nУведомления из галереи приостановлены.",)).start()
+        PREV_MULTI_BOT_STATE = bot_state
+
+    MULTI_BOT_ALERTS_ENABLED = bot_state
+    return JsonResponse({"status": "ok", "data": MULTI_GLOBAL_DATA})
+
+
+def api_radar_add(request):
+    figi = request.GET.get('figi')
+    ticker = request.GET.get('ticker')
+    if figi:
+        TRACKED_FIGIS.add(figi)
+        if ticker: TICKER_CACHE[figi] = ticker
+    return JsonResponse({"status": "ok"})
+
+
+def api_radar_remove(request):
+    figi = request.GET.get('figi')
+    if figi in TRACKED_FIGIS:
+        TRACKED_FIGIS.remove(figi)
+        if figi in MULTI_GLOBAL_DATA: del MULTI_GLOBAL_DATA[figi]
+    return JsonResponse({"status": "ok"})
+
+
+def api_search(request):
+    query = request.GET.get('q', '').strip().lower()
+    if not INVEST_TOKEN or len(query) < 2:
+        return JsonResponse({"status": "ok", "results": []})
+
+    global CACHE_READY, CACHED_INSTRUMENTS
+
+    results = []
+
+    if CACHE_READY:
+        # ПРИОРИТЕТ 1: Точное совпадение тикера (ввел "SBER" -> выдал SBER)
+        for inst in CACHED_INSTRUMENTS:
+            if query == inst['ticker'].lower():
+                results.append(inst)
+
+        # ПРИОРИТЕТ 2: Совпадение по началу имени или тикера
+        for inst in CACHED_INSTRUMENTS:
+            if inst not in results and (inst['ticker'].lower().startswith(query) or query in inst['name'].lower()):
+                results.append(inst)
+            if len(results) >= 8:
+                break
+
+        # Сортировка: Мосбиржа выше
+        results = sorted(results, key=lambda x: (x['class_code'] != 'TQBR', x['name']))
+
+    else:
+        # Fallback (если кэш еще не скачался за пару секунд после старта)
+        try:
+            with Client(INVEST_TOKEN) as client:
+                response = client.instruments.find_instrument(query=query)
+                sorted_instruments = sorted(response.instruments, key=lambda x: (x.class_code != 'TQBR', x.name))
+                seen_tickers = set()
+                for inst in sorted_instruments:
+                    if inst.instrument_type in ['share', 'etf', 'currency'] and inst.ticker not in seen_tickers:
+                        if getattr(inst, 'api_trade_available_flag', True):
+                            results.append({
+                                "figi": inst.figi, "ticker": inst.ticker, "name": inst.name,
+                                "type": inst.instrument_type, "class_code": getattr(inst, 'class_code', '')
+                            })
+                            seen_tickers.add(inst.ticker)
+                        if len(results) >= 8: break
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)})
+
+    formatted_results = []
+    for inst in results[:8]:
+        name_lower = inst['name'].lower()
+        display_name = inst['name']
+
+        if "сбер" in name_lower and "ап" in name_lower or "pref" in inst['ticker'].lower():
+            display_name = f"{inst['name']} (Прив.)"
+        elif inst['ticker'] == "SBER":
+            display_name = "Сбербанк (Основная акция)"
+        elif inst['ticker'] == "YDEX":
+            display_name = "Яндекс (МКПАО)"
+
+        formatted_results.append({
+            "figi": inst['figi'],
+            "ticker": inst['ticker'],
+            "name": display_name,
+            "type": inst['type']
+        })
+
+    return JsonResponse({"status": "ok", "results": formatted_results})
+
+
 def api_history_data(request):
     figi = request.GET.get('figi', 'BBG004730N88')
     tf = request.GET.get('tf', '1m')
 
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
 
-    # ВОССТАНОВЛЕННЫЙ ПОЛНЫЙ СПИСОК ТАЙМФРЕЙМОВ
     tf_map = {
         '1m': (CandleInterval.CANDLE_INTERVAL_1_MIN, timedelta(days=1)),
         '2m': (CandleInterval.CANDLE_INTERVAL_2_MIN, timedelta(days=1)),
@@ -305,7 +634,6 @@ def api_history_data(request):
 
 def api_portfolio_data(request):
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
-
     try:
         with Client(INVEST_TOKEN) as client:
             accounts_response = client.users.get_accounts()
@@ -330,8 +658,7 @@ def api_portfolio_data(request):
                 total_yield_rub += pos_yield_rub
                 total_invested += invested_sum
 
-                # === ПОЛУЧАЕМ НОРМАЛЬНЫЙ ТИКЕР ВМЕСТО FIGI ===
-                ticker = p.figi # По умолчанию оставляем FIGI
+                ticker = p.figi
                 try:
                     inst_info = client.instruments.get_instrument_by(
                         id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI,
@@ -340,18 +667,12 @@ def api_portfolio_data(request):
                     )
                     ticker = inst_info.instrument.ticker
                 except:
-                    pass # Если биржа не отдала тикер, останется FIGI
+                    pass
 
                 positions_data.append({
-                    "figi": p.figi,
-                    "ticker": ticker, # <--- Передаем тикер на сайт
-                    "instrument_type": p.instrument_type,
-                    "quantity": qty,
-                    "average_price": avg_price,
-                    "current_price": curr_price,
-                    "expected_yield": pos_yield_rub,
-                    "yield_percent": yield_percent,
-                    "total_sum": curr_price * qty
+                    "figi": p.figi, "ticker": ticker, "instrument_type": p.instrument_type,
+                    "quantity": qty, "average_price": avg_price, "current_price": curr_price,
+                    "expected_yield": pos_yield_rub, "yield_percent": yield_percent, "total_sum": curr_price * qty
                 })
 
             total_yield_percent = (total_yield_rub / total_invested * 100) if total_invested > 0 else 0.0
@@ -359,47 +680,9 @@ def api_portfolio_data(request):
                 quotation_to_decimal(portfolio.total_amount_portfolio)) if portfolio.total_amount_portfolio else 0.0
 
             return JsonResponse({
-                "status": "ok",
-                "total_portfolio_cost": total_portfolio_cost,
-                "expected_yield_rubles": total_yield_rub,
-                "expected_yield_percent": total_yield_percent,
+                "status": "ok", "total_portfolio_cost": total_portfolio_cost,
+                "expected_yield_rubles": total_yield_rub, "expected_yield_percent": total_yield_percent,
                 "positions": positions_data
             })
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)})
-
-
-def api_search(request):
-    query = request.GET.get('q', '').strip()
-    if not INVEST_TOKEN or len(query) < 2:
-        return JsonResponse({"status": "ok", "results": []})
-
-    try:
-        with Client(INVEST_TOKEN) as client:
-            response = client.instruments.find_instrument(query=query)
-            seen_tickers = set()
-            results = []
-
-            for inst in response.instruments:
-                if inst.instrument_type in ['share', 'etf', 'currency'] and inst.ticker not in seen_tickers:
-                    name_lower = inst.name.lower()
-                    if "сбер" in name_lower and "ап" in name_lower or "pref" in inst.ticker.lower():
-                        display_name = f"{inst.name} (Привилегированные)"
-                    elif inst.ticker == "SBER":
-                        display_name = "Сбербанк (Основная акция)"
-                    elif inst.ticker == "YDEX":
-                        display_name = "Яндекс (МКПАО ЯНДЕКС)"
-                    else:
-                        display_name = inst.name
-
-                    results.append({
-                        "figi": inst.figi,
-                        "ticker": inst.ticker,
-                        "name": display_name,
-                        "type": inst.instrument_type
-                    })
-                    seen_tickers.add(inst.ticker)
-
-            return JsonResponse({"status": "ok", "results": results[:8]})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)})
