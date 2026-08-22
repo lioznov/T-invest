@@ -5,25 +5,48 @@
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-    /* ФИКС ТРЯСКИ 1: Добавляем запас хода внизу страницы, чтобы скролл не дергался */
-    body {
-        padding-bottom: 50px !important;
-    }
+    .chart-card { display: flex; align-items: center; justify-content: center; height: 260px; overflow: hidden; }
+    .chart-wrapper { position: relative; width: 100%; height: 230px; }
 
-    /* ФИКС ТРЯСКИ 2: Жесткая капсула для графика */
-    .chart-card {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 260px;
-        overflow: hidden; /* Обрезаем любые микро-изменения размера */
-    }
-
-    .chart-wrapper {
-        position: relative;
+    /* ЖЕСТКИЕ СТИЛИ ДЛЯ РОВНОЙ ТАБЛИЦЫ (Защита от кэша) */
+    .portfolio-table {
         width: 100%;
-        height: 230px; /* Строго фиксированная высота внутри капсулы */
+        border-collapse: collapse;
+        font-size: 14px;
+        margin-top: 10px;
     }
+    .portfolio-table th {
+        text-align: left;
+        padding: 15px 10px !important; /* Увеличили отступы */
+        color: #6b7280;
+        font-weight: 500;
+        border-bottom: 2px solid #e5e7eb;
+        white-space: nowrap; /* Запрещаем перенос шапки */
+    }
+    .portfolio-table td {
+        padding: 12px 10px !important; /* Увеличили отступы между строками */
+        border-bottom: 1px solid #e5e7eb;
+        vertical-align: middle;
+    }
+
+    /* Принудительное выравнивание по правому краю */
+    .portfolio-table th.right-align,
+    .portfolio-table td.right-align {
+        text-align: right !important;
+    }
+
+    /* Стиль для короткого красивого тикера */
+    .ticker-badge {
+        background-color: #f3f4f6;
+        color: #111827;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 14px;
+    }
+
+    .portfolio-table tbody tr:hover { background-color: #f9fafb; }
 </style>
 {% endblock %}
 
@@ -51,10 +74,10 @@
 
 <div class="panel">
     <h3 style="margin-bottom: 15px; color: var(--text-dark);">Ваши активы</h3>
-    <table>
+    <table class="portfolio-table">
         <thead>
             <tr>
-                <th>FIGI / Акция</th>
+                <th>Тикер</th>
                 <th>Тип</th>
                 <th class="right-align">Кол-во</th>
                 <th class="right-align">Ср. цена</th>
@@ -64,7 +87,7 @@
             </tr>
         </thead>
         <tbody id="portfolioBody">
-            <tr><td colspan="7" style="text-align: center; color: var(--text-gray);">Загрузка портфеля...</td></tr>
+            <tr><td colspan="7" style="text-align: center; padding: 30px; color: #6b7280;">Загрузка портфеля...</td></tr>
         </tbody>
     </table>
 </div>
@@ -104,9 +127,7 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 cutout: '75%',
-                layout: {
-                    padding: 10
-                },
+                layout: { padding: 10 },
                 plugins: {
                     legend: { position: 'right', labels: { color: '#4b5563', font: { family: 'Inter', size: 13 } } },
                     tooltip: {
@@ -150,14 +171,15 @@
                     const s = isP && p.expected_yield > 0 ? "+" : "";
                     const typeName = TYPE_NAMES[p.instrument_type] || p.instrument_type;
 
+                    // Выводим p.ticker вместо p.figi, обернутый в класс ticker-badge
                     tbody.innerHTML += `
                         <tr>
-                            <td><b>${p.figi}</b></td>
-                            <td style="color: var(--text-gray);">${typeName}</td>
+                            <td><span class="ticker-badge">${p.ticker}</span></td>
+                            <td style="color: #6b7280;">${typeName}</td>
                             <td class="right-align">${p.quantity} шт.</td>
                             <td class="right-align">${p.average_price.toFixed(2)} ₽</td>
                             <td class="right-align">${p.current_price.toFixed(2)} ₽</td>
-                            <td class="right-align">${p.total_sum.toFixed(2)} ₽</td>
+                            <td class="right-align" style="font-weight: 500;">${p.total_sum.toFixed(2)} ₽</td>
                             <td class="right-align ${yClass}">${s}${p.expected_yield.toFixed(2)} ₽ (${s}${p.yield_percent.toFixed(2)}%)</td>
                         </tr>
                     `;

@@ -21,7 +21,8 @@ from t_tech.invest import (
     SubscribeOrderBookRequest,
     SubscriptionAction,
     OrderBookInstrument,
-    CandleInterval
+    CandleInterval,
+    InstrumentIdType
 )
 from t_tech.invest.utils import quotation_to_decimal
 
@@ -38,6 +39,10 @@ ACTIVE_FIGI = None
 STREAM_THREAD = None
 LOT_SIZE = 10
 ANOMALY_MULTIPLIER = 3.0
+
+# Глобальный флаг для управления алертами бота
+BOT_ALERTS_ENABLED = False
+PREV_BOT_STATE = False
 
 
 def send_telegram_message(message):
@@ -57,7 +62,7 @@ def start_stream_in_thread(figi):
 
 
 async def stream_data(figi):
-    global GLOBAL_DATA, ACTIVE_FIGI
+    global GLOBAL_DATA, ACTIVE_FIGI, BOT_ALERTS_ENABLED
     history_bids = collections.deque(maxlen=30)
     history_asks = collections.deque(maxlen=30)
     last_tg_alert, last_calib_time = 0, 0
@@ -67,19 +72,14 @@ async def stream_data(figi):
         try:
             async with AsyncClient(INVEST_TOKEN) as client:
                 async def request_iterator():
-                    # ПОДПИСЫВАЕМСЯ на стакан
                     yield MarketDataRequest(
                         subscribe_order_book_request=SubscribeOrderBookRequest(
                             subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
                             instruments=[OrderBookInstrument(figi=figi, depth=50)]
                         )
                     )
-
-                    # Ждем, пока пользователь не переключит акцию
                     while ACTIVE_FIGI == figi:
                         await asyncio.sleep(1)
-
-                    # ОТПИСЫВАЕМСЯ (чтобы биржа не заблокировала нас за спам)
                     yield MarketDataRequest(
                         subscribe_order_book_request=SubscribeOrderBookRequest(
                             subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_UNSUBSCRIBE,
@@ -131,40 +131,64 @@ async def stream_data(figi):
                                 alerts_to_send.append(
                                     f"🌊 <b>КАСКАД ПРОДАЖ!</b>\nОбъем вырос в 3 раза: {cur_ask_rub / 1_000_000:.1f}М ₽")
 
-                            for price, data in active_whales.items():
+                            # Умный алгоритм вычисления пробоев
+                            for price, data in list(active_whales.items()):
                                 w_type = data['type']
+                                initial_vol = data.get('initial_vol', data['vol'])
+                                pre_alert_sent = data.get('pre_alert_sent', False)
+
                                 if w_type == 'bid':
-                                    if bids_dict.get(price, 0) * price * LOT_SIZE < dynamic_whale_bid:
-                                        if cur_price <= price:
+                                    current_vol = bids_dict.get(price, 0) * price * LOT_SIZE
+                                    percent_left = (current_vol / initial_vol) * 100 if initial_vol > 0 else 0
+
+                                    if 0 < percent_left <= 25 and not pre_alert_sent:
+                                        alerts_to_send.append(
+                                            f"⚠️ <b>ГОТОВЬСЯ! ПРОБОЙ ВНИЗ!</b>\nПлиту покупателя на {price} ₽ доедают!\nОсталось: {current_vol / 1_000_000:.1f}М ₽ ({percent_left:.1f}%)")
+                                        active_whales[price]['pre_alert_sent'] = True
+
+                                    if current_vol < dynamic_whale_bid:
+                                        if pre_alert_sent or cur_price <= price:
                                             alerts_to_send.append(
-                                                f"📉 <b>ПРОБОЙ ВНИЗ!</b>\nПлита покупателя на {price} ₽ уничтожена!")
+                                                f"📉 <b>ПРОБОЙ ВНИЗ!</b>\nПлиту покупателя на {price} ₽ сожрали!")
                                         else:
                                             alerts_to_send.append(
                                                 f"👻 <b>СПУФИНГ!</b>\nПлита покупателя на {price} ₽ пропала.")
                                         prices_to_remove.append(price)
+
                                 elif w_type == 'ask':
-                                    if asks_dict.get(price, 0) * price * LOT_SIZE < dynamic_whale_ask:
-                                        if cur_price >= price:
+                                    current_vol = asks_dict.get(price, 0) * price * LOT_SIZE
+                                    percent_left = (current_vol / initial_vol) * 100 if initial_vol > 0 else 0
+
+                                    if 0 < percent_left <= 25 and not pre_alert_sent:
+                                        alerts_to_send.append(
+                                            f"⚠️ <b>ГОТОВЬСЯ! ПРОБОЙ ВВЕРХ!</b>\nПлиту продавца на {price} ₽ доедают!\nОсталось: {current_vol / 1_000_000:.1f}М ₽ ({percent_left:.1f}%)")
+                                        active_whales[price]['pre_alert_sent'] = True
+
+                                    if current_vol < dynamic_whale_ask:
+                                        if pre_alert_sent or cur_price >= price:
                                             alerts_to_send.append(
-                                                f"🚀 <b>ПРОБОЙ ВВЕРХ!</b>\nПлита продавца на {price} ₽ уничтожена!")
+                                                f"🚀 <b>ПРОБОЙ ВВЕРХ!</b>\nПлиту продавца на {price} ₽ сожрали!")
                                         else:
                                             alerts_to_send.append(
                                                 f"👻 <b>СПУФИНГ!</b>\nПлита продавца на {price} ₽ пропала.")
                                         prices_to_remove.append(price)
 
-                            for p in prices_to_remove: del active_whales[p]
+                            for p in prices_to_remove:
+                                del active_whales[p]
 
                             for price, qty in bids_dict.items():
                                 vol = price * qty * LOT_SIZE
                                 if vol >= dynamic_whale_bid and price not in active_whales:
-                                    active_whales[price] = {'type': 'bid', 'vol': vol}
+                                    active_whales[price] = {'type': 'bid', 'vol': vol, 'initial_vol': vol,
+                                                            'pre_alert_sent': False}
                                     alerts_to_send.append(
                                         f"🟢 <b>ПЛИТА (Покупка)</b>\nЦена: {price} ₽\nЛоты: <b>{qty} шт.</b>\nСумма: {vol / 1_000_000:.1f}М ₽")
 
                             for price, qty in asks_dict.items():
                                 vol = price * qty * LOT_SIZE
                                 if vol >= dynamic_whale_ask and price not in active_whales:
-                                    active_whales[price] = {'type': 'ask', 'vol': vol}
+                                    active_whales[price] = {'type': 'ask', 'vol': vol, 'initial_vol': vol,
+                                                            'pre_alert_sent': False}
                                     alerts_to_send.append(
                                         f"🔴 <b>ПЛИТА (Продажа)</b>\nЦена: {price} ₽\nЛоты: <b>{qty} шт.</b>\nСумма: {vol / 1_000_000:.1f}М ₽")
 
@@ -172,7 +196,9 @@ async def stream_data(figi):
                         if alerts_to_send:
                             anomaly_msg = alerts_to_send[0].replace("\n", " ")
                             is_anomaly = True
-                            if current_time - last_tg_alert > 10:
+
+                            # Отправляем в Telegram только если галочка на сайте включена
+                            if current_time - last_tg_alert > 10 and BOT_ALERTS_ENABLED:
                                 tg_msg = f"🔔 <b>АКЦИЯ: {figi}</b>\n\n" + "\n\n".join(alerts_to_send)
                                 await asyncio.to_thread(send_telegram_message, tg_msg)
                                 last_tg_alert = current_time
@@ -186,7 +212,6 @@ async def stream_data(figi):
                             "dynamic_whale_ask": dynamic_whale_ask
                         }
         except Exception as e:
-            # ЕСЛИ БИРЖА ОТВЕРГЛА ТИКЕР (например, он не торгуется)
             print(f"Ошибка потока: {e}")
             if ACTIVE_FIGI == figi:
                 GLOBAL_DATA[figi] = {"status": "error", "message": "Инструмент не торгуется (выберите другой)"}
@@ -200,14 +225,35 @@ def portfolio_page(request): return render(request, "portfolio.html")
 
 
 def api_real_data(request):
-    global ACTIVE_FIGI, STREAM_THREAD
+    global ACTIVE_FIGI, STREAM_THREAD, BOT_ALERTS_ENABLED, PREV_BOT_STATE
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
+
     figi = request.GET.get('figi', 'BBG004730N88')
+
+    # Читаем состояние галочки из браузера
+    bot_state = request.GET.get('bot', 'false') == 'true'
+
+    # === УМНАЯ ОТПРАВКА СООБЩЕНИЯ О СТАТУСЕ БОТА ===
+    if bot_state != PREV_BOT_STATE:
+        if bot_state:
+            # Отправляем сообщение в отдельном потоке, чтобы не тормозить сервер
+            threading.Thread(target=send_telegram_message,
+                             args=("🟢 <b>Радар ВКЛЮЧЕН</b>\nУведомления о пробоях активированы.",)).start()
+        else:
+            threading.Thread(target=send_telegram_message,
+                             args=("🔴 <b>Радар ВЫКЛЮЧЕН</b>\nУведомления приостановлены.",)).start()
+
+        # Обновляем память
+        PREV_BOT_STATE = bot_state
+
+    BOT_ALERTS_ENABLED = bot_state
+
     if ACTIVE_FIGI != figi:
         ACTIVE_FIGI = figi
         GLOBAL_DATA[figi] = {"status": "loading", "message": "Подключение к потоку биржи..."}
         STREAM_THREAD = threading.Thread(target=start_stream_in_thread, args=(figi,), daemon=True)
         STREAM_THREAD.start()
+
     return JsonResponse(GLOBAL_DATA.get(figi, {"status": "loading", "message": "Инициализация..."}))
 
 
@@ -217,6 +263,7 @@ def api_history_data(request):
 
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
 
+    # ВОССТАНОВЛЕННЫЙ ПОЛНЫЙ СПИСОК ТАЙМФРЕЙМОВ
     tf_map = {
         '1m': (CandleInterval.CANDLE_INTERVAL_1_MIN, timedelta(days=1)),
         '2m': (CandleInterval.CANDLE_INTERVAL_2_MIN, timedelta(days=1)),
@@ -283,8 +330,21 @@ def api_portfolio_data(request):
                 total_yield_rub += pos_yield_rub
                 total_invested += invested_sum
 
+                # === ПОЛУЧАЕМ НОРМАЛЬНЫЙ ТИКЕР ВМЕСТО FIGI ===
+                ticker = p.figi # По умолчанию оставляем FIGI
+                try:
+                    inst_info = client.instruments.get_instrument_by(
+                        id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI,
+                        class_code="",
+                        id=p.figi
+                    )
+                    ticker = inst_info.instrument.ticker
+                except:
+                    pass # Если биржа не отдала тикер, останется FIGI
+
                 positions_data.append({
                     "figi": p.figi,
+                    "ticker": ticker, # <--- Передаем тикер на сайт
                     "instrument_type": p.instrument_type,
                     "quantity": qty,
                     "average_price": avg_price,
@@ -309,8 +369,6 @@ def api_portfolio_data(request):
         return JsonResponse({"status": "error", "message": str(e)})
 
 
-# === НОВАЯ ФУНКЦИЯ ДЛЯ УМНОГО ПОИСКА (С ПРИОРИТЕТАМИ) ===
-# === УМНЫЙ ПОИСК БЕЗ ДУБЛИКАТОВ И С ПОДСКАЗКАМИ ===
 def api_search(request):
     query = request.GET.get('q', '').strip()
     if not INVEST_TOKEN or len(query) < 2:
@@ -319,22 +377,18 @@ def api_search(request):
     try:
         with Client(INVEST_TOKEN) as client:
             response = client.instruments.find_instrument(query=query)
-
-            seen_tickers = set()  # Чтобы исключить дубликаты с одинаковым тикером
+            seen_tickers = set()
             results = []
 
             for inst in response.instruments:
-                # Берем только акции, фонды и валюту, которые реально торгуются на основных площадках
                 if inst.instrument_type in ['share', 'etf', 'currency'] and inst.ticker not in seen_tickers:
-
-                    # Делаем понятное описание для пользователя
                     name_lower = inst.name.lower()
                     if "сбер" in name_lower and "ап" in name_lower or "pref" in inst.ticker.lower():
                         display_name = f"{inst.name} (Привилегированные)"
                     elif inst.ticker == "SBER":
                         display_name = "Сбербанк (Основная акция)"
                     elif inst.ticker == "YDEX":
-                        display_name = "Яндекс (МКПАО ЯДДЕКС)"
+                        display_name = "Яндекс (МКПАО ЯНДЕКС)"
                     else:
                         display_name = inst.name
 
@@ -344,7 +398,7 @@ def api_search(request):
                         "name": display_name,
                         "type": inst.instrument_type
                     })
-                    seen_tickers.add(inst.ticker)  # Запоминаем тикер, чтобы больше не дублировать
+                    seen_tickers.add(inst.ticker)
 
             return JsonResponse({"status": "ok", "results": results[:8]})
     except Exception as e:

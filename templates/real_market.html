@@ -4,6 +4,16 @@
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+    /* Стили для переключателя бота */
+    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--primary); }
+    input:focus + .slider { box-shadow: 0 0 1px var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -14,6 +24,15 @@
     </div>
     <div class="controls">
 
+        <!-- Переключатель Telegram-бота -->
+        <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); margin-right: 10px;">
+            <label for="botToggle" style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-dark);">🤖 Telegram Бот</label>
+            <label class="switch">
+                <input type="checkbox" id="botToggle" onchange="updateBotState()">
+                <span class="slider"></span>
+            </label>
+        </div>
+
         <!-- УМНЫЙ ПОИСК -->
         <div class="search-container">
             <span class="search-icon">🔍</span>
@@ -22,6 +41,7 @@
             <div id="searchDropdown" class="search-dropdown"></div>
         </div>
 
+        <!-- ПОЛНЫЙ СПИСОК ТАЙМФРЕЙМОВ -->
         <select id="timeframeSelect" onchange="changeTimeframe()">
             <optgroup label="Секунды">
                 <option value="5s">5 секунд</option>
@@ -95,6 +115,15 @@
     let currentDepth = 50;
     let searchTimeout = null;
 
+    // === 1. Читаем состояние из памяти браузера (по умолчанию false) ===
+    let isBotEnabled = localStorage.getItem('investpro_bot_enabled') === 'true';
+
+    function updateBotState() {
+        isBotEnabled = document.getElementById('botToggle').checked;
+        // === 2. Сохраняем выбор в память при каждом клике ===
+        localStorage.setItem('investpro_bot_enabled', isBotEnabled);
+    }
+
     function debounceSearch() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(performSearch, 500);
@@ -138,7 +167,7 @@
         document.getElementById('displayTicker').innerText = ticker;
         document.getElementById('iconTicker').innerText = ticker.charAt(0).toUpperCase();
 
-        startTracking(); // Перезапускаем поток с новой акцией
+        startTracking();
     }
 
     document.addEventListener('click', function(e) {
@@ -187,15 +216,10 @@
         const figi = document.getElementById('figiInput').value;
         const alertBox = document.getElementById('alertBox');
 
-        fetch(`/api/real-data/?figi=${figi}`)
+        fetch(`/api/real-data/?figi=${figi}&bot=${isBotEnabled}`)
             .then(res => res.json())
             .then(data => {
-                // Если статус loading, значит Питону нужно еще пару секунд на подключение к бирже
-                if (data.status === "loading") {
-                    isFetching = false;
-                    return;
-                }
-                if (data.status === "error") {
+                if (data.status === "loading" || data.status === "error") {
                     isFetching = false;
                     return;
                 }
@@ -232,16 +256,13 @@
 
                 const threshBid = data.dynamic_whale_bid || 100000000;
                 const threshAsk = data.dynamic_whale_ask || 100000000;
-
                 const tbody = document.getElementById('orderbookBody');
                 tbody.innerHTML = '';
 
                 const rowCount = Math.max(visibleBids.length, visibleAsks.length);
-
                 for (let i = 0; i < rowCount; i++) {
                     const bid = visibleBids[i];
                     const ask = visibleAsks[i];
-
                     let trHtml = '<tr>';
 
                     if (bid) {
@@ -249,28 +270,22 @@
                         const fillPercent = (bid.quantity / maxVolume) * 100;
                         const bg = isWhale ? '#ffd60a' : `linear-gradient(to left, rgba(5, 150, 105, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
                         const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
-
                         trHtml += `
                             <td class="col-bid-price bid-price" style="${textStyle} ${isWhale ? 'background-color:#ffd60a;' : ''}">${bid.price.toFixed(2)}</td>
                             <td class="col-bid-vol" style="background: ${bg}; ${textStyle}">${bid.quantity}</td>
                         `;
-                    } else {
-                        trHtml += `<td colspan="2"></td>`;
-                    }
+                    } else { trHtml += `<td colspan="2"></td>`; }
 
                     if (ask) {
                         const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= threshAsk;
                         const fillPercent = (ask.quantity / maxVolume) * 100;
                         const bg = isWhale ? '#ffd60a' : `linear-gradient(to right, rgba(220, 38, 38, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
                         const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
-
                         trHtml += `
                             <td class="col-ask-vol" style="background: ${bg}; ${textStyle}">${ask.quantity}</td>
                             <td class="col-ask-price ask-price" style="${textStyle} ${isWhale ? 'background-color:#ffd60a;' : ''}">${ask.price.toFixed(2)}</td>
                         `;
-                    } else {
-                        trHtml += `<td colspan="2"></td>`;
-                    }
+                    } else { trHtml += `<td colspan="2"></td>`; }
 
                     trHtml += '</tr>';
                     tbody.innerHTML += trHtml;
@@ -283,7 +298,9 @@
         if (trackerInterval) clearInterval(trackerInterval);
         const figi = document.getElementById('figiInput').value;
 
-        // === ВИЗУАЛЬНАЯ ОЧИСТКА ПРИ ПЕРЕКЛЮЧЕНИИ ===
+        // === 3. Синхронизируем положение галочки с сохраненной памятью ===
+        document.getElementById('botToggle').checked = isBotEnabled;
+
         document.getElementById('orderbookBody').innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-gray);">Подключение к потоку биржи...</td></tr>';
         document.getElementById('totalBids').innerText = '0 ₽';
         document.getElementById('totalAsks').innerText = '0 ₽';
