@@ -557,8 +557,12 @@ def api_search(request):
                     if inst.instrument_type in ['share', 'etf', 'currency'] and inst.ticker not in seen_tickers:
                         if getattr(inst, 'api_trade_available_flag', True):
                             results.append({
-                                "figi": inst.figi, "ticker": inst.ticker, "name": inst.name,
-                                "type": inst.instrument_type, "class_code": getattr(inst, 'class_code', '')
+                                "figi": inst.figi,
+                                "uid": getattr(inst, 'uid', ''),  # Добавили UID для fallback-поиска
+                                "ticker": inst.ticker,
+                                "name": inst.name,
+                                "type": inst.instrument_type,
+                                "class_code": getattr(inst, 'class_code', '')
                             })
                             seen_tickers.add(inst.ticker)
                         if len(results) >= 8: break
@@ -579,6 +583,7 @@ def api_search(request):
 
         formatted_results.append({
             "figi": inst['figi'],
+            "uid": inst.get('uid', ''),  # Передаем uid дальше в JSON
             "ticker": inst['ticker'],
             "name": display_name,
             "type": inst['type']
@@ -686,3 +691,4 @@ def api_portfolio_data(request):
             })
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)})
+

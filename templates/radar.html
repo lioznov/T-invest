@@ -4,7 +4,6 @@
 
 {% block extra_head %}
 <style>
-    /* Стили для переключателя бота (скопировано из главного терминала) */
     .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
@@ -13,7 +12,6 @@
     input:focus + .slider { box-shadow: 0 0 1px var(--primary); }
     input:checked + .slider:before { transform: translateX(20px); }
 
-    /* Сетка радаров */
     .radar-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -39,6 +37,21 @@
         margin-bottom: 10px;
     }
 
+    .ticker-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .stock-logo {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        object-fit: contain;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+    }
+
     .mini-ticker { font-size: 18px; font-weight: bold; color: var(--primary); }
     .mini-price { font-size: 16px; font-weight: 600; color: var(--text-dark); }
 
@@ -60,6 +73,53 @@
     .mini-book td { padding: 4px 2px; }
     .col-vol { width: 50%; }
     .col-pr { width: 50%; }
+
+    /* Выпадающий список активов */
+    .watchlist-dropdown-container {
+        position: relative;
+        display: inline-block;
+    }
+    .watchlist-btn {
+        background: #f3f4f6;
+        border: 1px solid var(--border-color);
+        padding: 8px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        color: var(--text-dark);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .watchlist-btn:hover { background: #e5e7eb; }
+
+    .watchlist-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        margin-top: 8px;
+        background: white;
+        min-width: 280px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        z-index: 100;
+        padding: 8px;
+    }
+    .watchlist-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 13px;
+    }
+    .watchlist-item:last-child { border-bottom: none; }
+    .watchlist-item-info { display: flex; gap: 10px; align-items: center; }
+    .watchlist-item-ticker { font-weight: bold; color: var(--primary); }
+    .watchlist-item-price { color: var(--text-dark); font-weight: 500; }
 </style>
 {% endblock %}
 
@@ -71,6 +131,16 @@
     </div>
 
     <div style="display: flex; gap: 15px; align-items: center;">
+
+        <!-- Кнопка выпадающего списка с логотипами и ценами -->
+        <div class="watchlist-dropdown-container">
+            <button class="watchlist-btn" onclick="toggleWatchlistDropdown()">
+                📋 Список активов (<span id="watchlistCount">0</span>) ▾
+            </button>
+            <div id="watchlistDropdown" class="watchlist-content">
+                <div style="padding: 10px; text-align: center; color: gray; font-size: 12px;">Список пуст</div>
+            </div>
+        </div>
 
         <!-- Переключатель Телеграм Мульти-Бота -->
         <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);">
@@ -91,21 +161,24 @@
 </div>
 
 <div id="radarGrid" class="radar-grid">
-    <!-- Сюда вставляются карточки мини-стаканов -->
+    <!-- Карточки мини-стаканов -->
 </div>
 
 <script>
     const LOT_SIZE = 10;
     let searchTimeout = null;
 
-    // Память переключателя Мульти-Бота
     let isMultiBotEnabled = localStorage.getItem('investpro_multibot_enabled') === 'true';
-    // Память списка акций (НАДЕЖНЫЙ ИСТОЧНИК)
     let savedRadars = JSON.parse(localStorage.getItem('investpro_saved_radars') || '[]');
 
     function updateMultiBotState() {
         isMultiBotEnabled = document.getElementById('multiBotToggle').checked;
         localStorage.setItem('investpro_multibot_enabled', isMultiBotEnabled);
+    }
+
+    function toggleWatchlistDropdown() {
+        const dd = document.getElementById('watchlistDropdown');
+        dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
     }
 
     function debounceSearch() {
@@ -126,7 +199,7 @@
                     dropdown.innerHTML = '';
                     data.results.forEach(item => {
                         dropdown.innerHTML += `
-                            <div class="search-item" onclick="addInstrument('${item.figi}', '${item.ticker}')">
+                            <div class="search-item" onclick="addInstrument('${item.figi}', '${item.ticker}', '${item.uid}')">
                                 <span class="search-item-ticker">${item.ticker} (${item.type})</span>
                                 <span class="search-item-name">${item.name}</span>
                             </div>
@@ -137,12 +210,12 @@
             });
     }
 
-    function addInstrument(figi, ticker) {
+    function addInstrument(figi, ticker, uid) {
         document.getElementById('searchInput').value = '';
         document.getElementById('searchDropdown').style.display = 'none';
 
         if (!savedRadars.some(r => r.figi === figi)) {
-            savedRadars.push({figi, ticker});
+            savedRadars.push({figi, ticker, uid: uid || ''});
             localStorage.setItem('investpro_saved_radars', JSON.stringify(savedRadars));
         }
         fetchRadarData();
@@ -155,8 +228,8 @@
     }
 
     function fetchRadarData() {
-        // Передаем весь список акций на сервер, чтобы он синхронизировался с браузером!
         const syncStr = savedRadars.map(r => `${r.figi}:${r.ticker}`).join(',');
+        document.getElementById('watchlistCount').innerText = savedRadars.length;
 
         fetch(`/api/radar-data/?bot=${isMultiBotEnabled}&sync=${syncStr}`)
             .then(res => res.json())
@@ -166,12 +239,43 @@
                 const grid = document.getElementById('radarGrid');
                 grid.innerHTML = '';
 
+                // Рендер выпадающего списка со списком активов, реальными ценами и логотипами
+                const watchlistDropdown = document.getElementById('watchlistDropdown');
+                let watchlistHtml = '';
+                if (savedRadars.length === 0) {
+                    watchlistHtml = '<div style="padding: 10px; text-align: center; color: gray; font-size: 12px;">Список пуст</div>';
+                } else {
+                    savedRadars.forEach(r => {
+                        const dat = resp.data[r.figi];
+                        const priceStr = (dat && dat.current_price) ? `${dat.current_price.toFixed(2)} ₽` : '...';
+                        const logoUrl = r.uid ? `https://invest-brands.cdn-tinkoff.ru/${r.uid}x160.png` : '';
+
+                        watchlistHtml += `
+                            <div class="watchlist-item">
+                                <div class="watchlist-item-info">
+                                    ${logoUrl ? `<img src="${logoUrl}" class="stock-logo" onerror="this.style.display='none'">` : ''}
+                                    <span class="watchlist-item-ticker">${r.ticker}</span>
+                                    <span class="watchlist-item-price">${priceStr}</span>
+                                </div>
+                                <button class="remove-btn" onclick="removeInstrument('${r.figi}')">✕</button>
+                            </div>
+                        `;
+                    });
+                }
+                watchlistDropdown.innerHTML = watchlistHtml;
+
                 for (const [figi, data] of Object.entries(resp.data)) {
+                    const radarMeta = savedRadars.find(r => r.figi === figi);
+                    const logoUrl = (radarMeta && radarMeta.uid) ? `https://invest-brands.cdn-tinkoff.ru/${radarMeta.uid}x160.png` : '';
+
                     if (data.status === 'loading') {
                         grid.innerHTML += `
                             <div class="mini-card" style="opacity: 0.7;">
                                 <div class="mini-header">
-                                    <span class="mini-ticker">${data.ticker}</span>
+                                    <div class="ticker-container">
+                                        ${logoUrl ? `<img src="${logoUrl}" class="stock-logo" onerror="this.style.display='none'">` : ''}
+                                        <span class="mini-ticker">${data.ticker}</span>
+                                    </div>
                                     <span class="mini-price">... ₽</span>
                                     <button class="remove-btn" onclick="removeInstrument('${figi}')">✕</button>
                                 </div>
@@ -217,7 +321,10 @@
                     const cardHtml = `
                         <div class="mini-card">
                             <div class="mini-header">
-                                <span class="mini-ticker">${data.ticker}</span>
+                                <div class="ticker-container">
+                                    ${logoUrl ? `<img src="${logoUrl}" class="stock-logo" onerror="this.style.display='none'">` : ''}
+                                    <span class="mini-ticker">${data.ticker}</span>
+                                </div>
                                 <span class="mini-price">${data.current_price.toFixed(2)} ₽</span>
                                 <button class="remove-btn" onclick="removeInstrument('${figi}')" title="Убрать с радара">✕</button>
                             </div>
@@ -244,8 +351,11 @@
     };
 
     document.addEventListener('click', function(e) {
-        if (!document.getElementById('searchInput').contains(e.target)) {
+        if (!document.getElementById('searchInput').contains(e.target) && !document.getElementById('searchDropdown').contains(e.target)) {
             document.getElementById('searchDropdown').style.display = 'none';
+        }
+        if (!e.target.closest('.watchlist-dropdown-container')) {
+            document.getElementById('watchlistDropdown').style.display = 'none';
         }
     });
 </script>
