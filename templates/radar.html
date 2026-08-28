@@ -37,21 +37,6 @@
         margin-bottom: 10px;
     }
 
-    .ticker-container {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .stock-logo {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        object-fit: contain;
-        background: #f3f4f6;
-        border: 1px solid #e5e7eb;
-    }
-
     .mini-ticker { font-size: 18px; font-weight: bold; color: var(--primary); }
     .mini-price { font-size: 16px; font-weight: 600; color: var(--text-dark); }
 
@@ -132,7 +117,7 @@
 
     <div style="display: flex; gap: 15px; align-items: center;">
 
-        <!-- Кнопка выпадающего списка с логотипами и ценами -->
+        <!-- Кнопка выпадающего списка -->
         <div class="watchlist-dropdown-container">
             <button class="watchlist-btn" onclick="toggleWatchlistDropdown()">
                 📋 Список активов (<span id="watchlistCount">0</span>) ▾
@@ -199,7 +184,7 @@
                     dropdown.innerHTML = '';
                     data.results.forEach(item => {
                         dropdown.innerHTML += `
-                            <div class="search-item" onclick="addInstrument('${item.figi}', '${item.ticker}', '${item.uid}')">
+                            <div class="search-item" onclick="addInstrument('${item.figi}', '${item.ticker}')">
                                 <span class="search-item-ticker">${item.ticker} (${item.type})</span>
                                 <span class="search-item-name">${item.name}</span>
                             </div>
@@ -210,12 +195,12 @@
             });
     }
 
-    function addInstrument(figi, ticker, uid) {
+    function addInstrument(figi, ticker) {
         document.getElementById('searchInput').value = '';
         document.getElementById('searchDropdown').style.display = 'none';
 
         if (!savedRadars.some(r => r.figi === figi)) {
-            savedRadars.push({figi, ticker, uid: uid || ''});
+            savedRadars.push({figi, ticker});
             localStorage.setItem('investpro_saved_radars', JSON.stringify(savedRadars));
         }
         fetchRadarData();
@@ -239,7 +224,7 @@
                 const grid = document.getElementById('radarGrid');
                 grid.innerHTML = '';
 
-                // Рендер выпадающего списка со списком активов, реальными ценами и логотипами
+                // Рендер выпадающего списка
                 const watchlistDropdown = document.getElementById('watchlistDropdown');
                 let watchlistHtml = '';
                 if (savedRadars.length === 0) {
@@ -248,12 +233,10 @@
                     savedRadars.forEach(r => {
                         const dat = resp.data[r.figi];
                         const priceStr = (dat && dat.current_price) ? `${dat.current_price.toFixed(2)} ₽` : '...';
-                        const logoUrl = r.uid ? `https://invest-brands.cdn-tinkoff.ru/${r.uid}x160.png` : '';
 
                         watchlistHtml += `
                             <div class="watchlist-item">
                                 <div class="watchlist-item-info">
-                                    ${logoUrl ? `<img src="${logoUrl}" class="stock-logo" onerror="this.style.display='none'">` : ''}
                                     <span class="watchlist-item-ticker">${r.ticker}</span>
                                     <span class="watchlist-item-price">${priceStr}</span>
                                 </div>
@@ -266,16 +249,13 @@
 
                 for (const [figi, data] of Object.entries(resp.data)) {
                     const radarMeta = savedRadars.find(r => r.figi === figi);
-                    const logoUrl = (radarMeta && radarMeta.uid) ? `https://invest-brands.cdn-tinkoff.ru/${radarMeta.uid}x160.png` : '';
+                    const tickerText = radarMeta ? radarMeta.ticker : data.ticker;
 
                     if (data.status === 'loading') {
                         grid.innerHTML += `
                             <div class="mini-card" style="opacity: 0.7;">
                                 <div class="mini-header">
-                                    <div class="ticker-container">
-                                        ${logoUrl ? `<img src="${logoUrl}" class="stock-logo" onerror="this.style.display='none'">` : ''}
-                                        <span class="mini-ticker">${data.ticker}</span>
-                                    </div>
+                                    <span class="mini-ticker">${tickerText}</span>
                                     <span class="mini-price">... ₽</span>
                                     <button class="remove-btn" onclick="removeInstrument('${figi}')">✕</button>
                                 </div>
@@ -321,10 +301,7 @@
                     const cardHtml = `
                         <div class="mini-card">
                             <div class="mini-header">
-                                <div class="ticker-container">
-                                    ${logoUrl ? `<img src="${logoUrl}" class="stock-logo" onerror="this.style.display='none'">` : ''}
-                                    <span class="mini-ticker">${data.ticker}</span>
-                                </div>
+                                <span class="mini-ticker">${tickerText}</span>
                                 <span class="mini-price">${data.current_price.toFixed(2)} ₽</span>
                                 <button class="remove-btn" onclick="removeInstrument('${figi}')" title="Убрать с радара">✕</button>
                             </div>

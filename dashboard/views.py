@@ -376,7 +376,7 @@ async def multi_stream_data():
                             for p in prices_to_remove:
                                 del active_whales[figi][p]
 
-                            # В Мульти-Радаре молча фиксируем новые плиты (без отправки спама)
+                            # В Мульти-Радаре молча фиксируем новые плиты
                             for price, qty in bids_dict.items():
                                 vol = price * qty * LOT_SIZE
                                 if vol >= dynamic_whale_bid and price not in active_whales[figi]:
@@ -469,19 +469,20 @@ def api_radar_data(request):
         MULTI_STREAM_THREAD = threading.Thread(target=start_multi_stream_in_thread, daemon=True)
         MULTI_STREAM_THREAD.start()
 
-    # === ВОССТАНОВЛЕННАЯ ФУНКЦИЯ СИНХРОНИЗАЦИИ (ЧТОБЫ АКЦИИ НЕ СБРАСЫВАЛИСЬ) ===
     sync_param = request.GET.get('sync')
     if sync_param is not None:
         frontend_figis = set()
         if sync_param != "":
             for pair in sync_param.split(','):
-                if ':' in pair:
-                    f, t = pair.split(':', 1)
-                    TRACKED_FIGIS.add(f)
-                    TICKER_CACHE[f] = t
-                    frontend_figis.add(f)
-                    if f not in MULTI_GLOBAL_DATA:
-                        MULTI_GLOBAL_DATA[f] = {"status": "loading", "ticker": t, "message": "Подключение..."}
+                parts = pair.split(':')
+                f, t = parts[0], parts[1] if len(parts) > 1 else parts[0]
+
+                TRACKED_FIGIS.add(f)
+                TICKER_CACHE[f] = t
+                frontend_figis.add(f)
+
+                if f not in MULTI_GLOBAL_DATA:
+                    MULTI_GLOBAL_DATA[f] = {"status": "loading", "ticker": t, "message": "Подключение..."}
 
         to_remove = TRACKED_FIGIS - frontend_figis
         for f in list(to_remove):
@@ -523,44 +524,37 @@ def api_radar_remove(request):
 
 def api_search(request):
     query = request.GET.get('q', '').strip().lower()
-    if not INVEST_TOKEN or len(query) < 2:
+    if not INVEST_TOKEN or len(query) < 1:
         return JsonResponse({"status": "ok", "results": []})
 
     global CACHE_READY, CACHED_INSTRUMENTS
-
     results = []
 
     if CACHE_READY:
-        # ПРИОРИТЕТ 1: Точное совпадение тикера (ввел "SBER" -> выдал SBER)
         for inst in CACHED_INSTRUMENTS:
             if query == inst['ticker'].lower():
                 results.append(inst)
 
-        # ПРИОРИТЕТ 2: Совпадение по началу имени или тикера
         for inst in CACHED_INSTRUMENTS:
             if inst not in results and (inst['ticker'].lower().startswith(query) or query in inst['name'].lower()):
                 results.append(inst)
             if len(results) >= 8:
                 break
 
-        # Сортировка: Мосбиржа выше
         results = sorted(results, key=lambda x: (x['class_code'] != 'TQBR', x['name']))
-
     else:
-        # Fallback (если кэш еще не скачался за пару секунд после старта)
         try:
             with Client(INVEST_TOKEN) as client:
                 response = client.instruments.find_instrument(query=query)
-                sorted_instruments = sorted(response.instruments, key=lambda x: (x.class_code != 'TQBR', x.name))
+                sorted_instruments = sorted(response.instruments, key=lambda x: (getattr(x, 'class_code', '') != 'TQBR', getattr(x, 'name', '')))
                 seen_tickers = set()
                 for inst in sorted_instruments:
                     if inst.instrument_type in ['share', 'etf', 'currency'] and inst.ticker not in seen_tickers:
                         if getattr(inst, 'api_trade_available_flag', True):
                             results.append({
                                 "figi": inst.figi,
-                                "uid": getattr(inst, 'uid', ''),  # Добавили UID для fallback-поиска
-                                "ticker": inst.ticker,
-                                "name": inst.name,
+                                "ticker": inst.ticker or '',
+                                "name": inst.name or '',
                                 "type": inst.instrument_type,
                                 "class_code": getattr(inst, 'class_code', '')
                             })
@@ -571,10 +565,10 @@ def api_search(request):
 
     formatted_results = []
     for inst in results[:8]:
-        name_lower = inst['name'].lower()
+        name_lower = (inst['name'] or '').lower()
         display_name = inst['name']
 
-        if "сбер" in name_lower and "ап" in name_lower or "pref" in inst['ticker'].lower():
+        if "сбер" in name_lower and "ап" in name_lower or "pref" in (inst['ticker'] or '').lower():
             display_name = f"{inst['name']} (Прив.)"
         elif inst['ticker'] == "SBER":
             display_name = "Сбербанк (Основная акция)"
@@ -583,7 +577,6 @@ def api_search(request):
 
         formatted_results.append({
             "figi": inst['figi'],
-            "uid": inst.get('uid', ''),  # Передаем uid дальше в JSON
             "ticker": inst['ticker'],
             "name": display_name,
             "type": inst['type']
@@ -691,4 +684,3 @@ def api_portfolio_data(request):
             })
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)})
-
