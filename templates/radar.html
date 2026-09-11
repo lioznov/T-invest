@@ -111,7 +111,7 @@
 {% block content %}
 <div class="panel controls-bar" style="margin-top: 20px;">
     <div>
-        <h3 style="margin: 0; color: var(--text-dark);">⚡ Мульти-Радар</h3>
+        <h3 style="margin: 0; color: var(--text-dark);">Мульти-Радар</h3>
         <p style="margin: 5px 0 0 0; font-size: 13px; color: var(--text-gray);">Отслеживание пробоев сразу по списку активов</p>
     </div>
 
@@ -120,7 +120,7 @@
         <!-- Кнопка выпадающего списка -->
         <div class="watchlist-dropdown-container">
             <button class="watchlist-btn" onclick="toggleWatchlistDropdown()">
-                📋 Список активов (<span id="watchlistCount">0</span>) ▾
+                Список активов (<span id="watchlistCount">0</span>) ▾
             </button>
             <div id="watchlistDropdown" class="watchlist-content">
                 <div style="padding: 10px; text-align: center; color: gray; font-size: 12px;">Список пуст</div>
@@ -129,7 +129,7 @@
 
         <!-- Переключатель Телеграм Мульти-Бота -->
         <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);">
-            <label for="multiBotToggle" style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-dark);">🤖 Мульти-Бот</label>
+            <label for="multiBotToggle" style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-dark);">Мульти-бот</label>
             <label class="switch">
                 <input type="checkbox" id="multiBotToggle" onchange="updateMultiBotState()">
                 <span class="slider"></span>
@@ -137,7 +137,7 @@
         </div>
 
         <div class="search-container">
-            <span class="search-icon">🔍</span>
+            <span class="search-icon">⌕</span>
             <input type="text" id="searchInput" class="search-input" placeholder="Добавить акцию на радар..." autocomplete="off" oninput="debounceSearch()">
             <div id="searchDropdown" class="search-dropdown"></div>
         </div>

@@ -22,7 +22,8 @@ from t_tech.invest import (
     SubscriptionAction,
     OrderBookInstrument,
     CandleInterval,
-    InstrumentIdType
+    InstrumentIdType,
+    SubscriptionStatus
 )
 from t_tech.invest.utils import quotation_to_decimal
 
@@ -63,20 +64,25 @@ def _load_cache():
     if not INVEST_TOKEN: return
     try:
         with Client(INVEST_TOKEN) as client:
-            shares = client.instruments.shares().instruments
-            etfs = client.instruments.etfs().instruments
-            currencies = client.instruments.currencies().instruments
-
             temp_cache = []
-            for inst in shares + etfs + currencies:
-                if getattr(inst, 'api_trade_available_flag', False):
-                    temp_cache.append({
-                        'figi': inst.figi,
-                        'ticker': inst.ticker,
-                        'name': inst.name,
-                        'type': inst.instrument_type,
-                        'class_code': getattr(inst, 'class_code', '')
-                    })
+            instrument_groups = (
+                (client.instruments.shares().instruments, 'share'),
+                (client.instruments.etfs().instruments, 'etf'),
+                (client.instruments.currencies().instruments, 'currency'),
+            )
+
+            # Share, Etf и Currency — разные модели SDK. У них нет общего
+            # атрибута instrument_type, поэтому сохраняем тип из группы запроса.
+            for instruments, instrument_type in instrument_groups:
+                for inst in instruments:
+                    if getattr(inst, 'api_trade_available_flag', False):
+                        temp_cache.append({
+                            'figi': inst.figi,
+                            'ticker': inst.ticker,
+                            'name': inst.name,
+                            'type': instrument_type,
+                            'class_code': getattr(inst, 'class_code', '')
+                        })
             CACHED_INSTRUMENTS = temp_cache
             CACHE_READY = True
             print(f"✅ Кэш поиска загружен: {len(CACHED_INSTRUMENTS)} инструментов.")
@@ -102,6 +108,42 @@ def send_telegram_message(message):
 # === ЛОГИКА ОДИНОЧНОГО РАДАРА (real_market.html) ===
 # =========================================================================
 def start_stream_in_thread(figi):
+    # Сначала получаем обычный снимок стакана. Поток может не прислать данные
+    # мгновенно (например, когда в инструменте нет новых изменений), и без
+    # снимка интерфейс оставался в состоянии бесконечной загрузки.
+    try:
+        with Client(INVEST_TOKEN) as client:
+            orderbook = client.market_data.get_order_book(instrument_id=figi, depth=50)
+            bids = [
+                {"price": float(quotation_to_decimal(item.price)), "quantity": item.quantity}
+                for item in orderbook.bids[:50]
+            ]
+            asks = [
+                {"price": float(quotation_to_decimal(item.price)), "quantity": item.quantity}
+                for item in orderbook.asks[:50]
+            ]
+
+            bid_rubles = sum(item['price'] * item['quantity'] * LOT_SIZE for item in bids)
+            ask_rubles = sum(item['price'] * item['quantity'] * LOT_SIZE for item in asks)
+            current_price = (bids[0]['price'] + asks[0]['price']) / 2 if bids and asks else 0
+
+            GLOBAL_DATA[figi] = {
+                "status": "ok",
+                "bids": bids,
+                "asks": asks,
+                "is_calibrating": True,
+                "anomaly_msg": "",
+                "is_anomaly": False,
+                "total_bid_rubles": bid_rubles,
+                "total_ask_rubles": ask_rubles,
+                "total_volume": bid_rubles + ask_rubles,
+                "current_price": current_price,
+                "dynamic_whale_bid": 100_000_000,
+                "dynamic_whale_ask": 100_000_000,
+            }
+    except Exception as error:
+        print(f"Ошибка начального снимка стакана: {error}")
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(stream_data(figi))
@@ -121,7 +163,7 @@ async def stream_data(figi):
                     yield MarketDataRequest(
                         subscribe_order_book_request=SubscribeOrderBookRequest(
                             subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
-                            instruments=[OrderBookInstrument(figi=figi, depth=50)]
+                            instruments=[OrderBookInstrument(instrument_id=figi, depth=50)]
                         )
                     )
                     while ACTIVE_FIGI == figi:
@@ -129,12 +171,21 @@ async def stream_data(figi):
                     yield MarketDataRequest(
                         subscribe_order_book_request=SubscribeOrderBookRequest(
                             subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_UNSUBSCRIBE,
-                            instruments=[OrderBookInstrument(figi=figi, depth=50)]
+                            instruments=[OrderBookInstrument(instrument_id=figi, depth=50)]
                         )
                     )
 
                 async for marketdata in client.market_data_stream.market_data_stream(request_iterator()):
                     if ACTIVE_FIGI != figi: break
+
+                    if marketdata.subscribe_order_book_response:
+                        for subscription in marketdata.subscribe_order_book_response.order_book_subscriptions:
+                            if subscription.subscription_status != SubscriptionStatus.SUBSCRIPTION_STATUS_SUCCESS:
+                                status_name = subscription.subscription_status.name
+                                GLOBAL_DATA[figi] = {
+                                    "status": "error",
+                                    "message": f"Биржа отклонила подписку на стакан: {status_name}"
+                                }
 
                     if marketdata.orderbook:
                         ob = marketdata.orderbook
@@ -293,20 +344,29 @@ async def multi_stream_data():
                             yield MarketDataRequest(
                                 subscribe_order_book_request=SubscribeOrderBookRequest(
                                     subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_UNSUBSCRIBE,
-                                    instruments=[OrderBookInstrument(figi=f, depth=50) for f in to_unsub]
+                                    instruments=[OrderBookInstrument(instrument_id=f, depth=50) for f in to_unsub]
                                 )
                             )
                         if to_sub:
                             yield MarketDataRequest(
                                 subscribe_order_book_request=SubscribeOrderBookRequest(
                                     subscription_action=SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE,
-                                    instruments=[OrderBookInstrument(figi=f, depth=50) for f in to_sub]
+                                    instruments=[OrderBookInstrument(instrument_id=f, depth=50) for f in to_sub]
                                 )
                             )
                         subscribed = current_tracked
                         await asyncio.sleep(1)
 
                 async for marketdata in client.market_data_stream.market_data_stream(request_iterator()):
+                    if marketdata.subscribe_order_book_response:
+                        for subscription in marketdata.subscribe_order_book_response.order_book_subscriptions:
+                            if subscription.subscription_status != SubscriptionStatus.SUBSCRIPTION_STATUS_SUCCESS:
+                                failed_id = subscription.figi or subscription.instrument_uid
+                                MULTI_GLOBAL_DATA[failed_id] = {
+                                    "status": "error",
+                                    "message": f"Подписка отклонена: {subscription.subscription_status.name}"
+                                }
+
                     if marketdata.orderbook:
                         ob = marketdata.orderbook
                         figi = ob.figi
@@ -614,7 +674,7 @@ def api_history_data(request):
 
     try:
         with Client(INVEST_TOKEN) as client:
-            candles = client.get_all_candles(figi=figi, from_=from_time, to=now, interval=interval)
+            candles = client.get_all_candles(instrument_id=figi, from_=from_time, to=now, interval=interval)
             data = []
             for c in candles:
                 if c.is_complete:
