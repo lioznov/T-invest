@@ -18,14 +18,14 @@
     .portfolio-table th {
         text-align: left;
         padding: 15px 10px !important; /* Увеличили отступы */
-        color: #6b7280;
+        color: #8997ab;
         font-weight: 500;
-        border-bottom: 2px solid #e5e7eb;
+        border-bottom: 1px solid #334052;
         white-space: nowrap; /* Запрещаем перенос шапки */
     }
     .portfolio-table td {
         padding: 12px 10px !important; /* Увеличили отступы между строками */
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid #25303e;
         vertical-align: middle;
     }
 
@@ -37,8 +37,8 @@
 
     /* Стиль для короткого красивого тикера */
     .ticker-badge {
-        background-color: #f3f4f6;
-        color: #111827;
+        background-color: #20342f;
+        color: #7cdbc0;
         font-weight: 700;
         padding: 4px 8px;
         border-radius: 6px;
@@ -46,7 +46,7 @@
         font-size: 14px;
     }
 
-    .portfolio-table tbody tr:hover { background-color: #f9fafb; }
+    .portfolio-table tbody tr:hover { background-color: #1b2632; }
 </style>
 {% endblock %}
 
@@ -87,7 +87,7 @@
             </tr>
         </thead>
         <tbody id="portfolioBody">
-            <tr><td colspan="7" style="text-align: center; padding: 30px; color: #6b7280;">Загрузка портфеля...</td></tr>
+            <tr><td colspan="7" style="text-align: center; padding: 30px; color: #8997ab;">Загрузка портфеля...</td></tr>
         </tbody>
     </table>
 </div>
@@ -175,7 +175,7 @@
                     tbody.innerHTML += `
                         <tr>
                             <td><span class="ticker-badge">${p.ticker}</span></td>
-                            <td style="color: #6b7280;">${typeName}</td>
+                            <td style="color: #8997ab;">${typeName}</td>
                             <td class="right-align">${p.quantity} шт.</td>
                             <td class="right-align">${p.average_price.toFixed(2)} ₽</td>
                             <td class="right-align">${p.current_price.toFixed(2)} ₽</td>

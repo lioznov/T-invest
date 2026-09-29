@@ -476,13 +476,13 @@ async def multi_stream_data():
 # =========================================================================
 # === ПРЕДСТАВЛЕНИЯ (VIEWS) ===
 # =========================================================================
-def real_market_page(request): return render(request, "real_market.html")
+def real_market_page(request): return render(request, "real_market.html", {"page_id": "terminal", "page_title": "Стакан", "page_description": "График, заявки и состояние рынка для выбранной акции."})
 
 
-def portfolio_page(request): return render(request, "portfolio.html")
+def portfolio_page(request): return render(request, "portfolio.html", {"page_id": "portfolio", "page_title": "Портфель", "page_description": "Состав и текущая стоимость ваших активов."})
 
 
-def radar_page(request): return render(request, "radar.html")
+def radar_page(request): return render(request, "radar.html", {"page_id": "radar", "page_title": "Радар", "page_description": "Несколько стаканов на одном экране."})
 
 
 def api_real_data(request):
@@ -584,6 +584,7 @@ def api_radar_remove(request):
 
 def api_search(request):
     query = request.GET.get('q', '').strip().lower()
+    shares_only = request.GET.get('kind') == 'share'
     if not INVEST_TOKEN or len(query) < 1:
         return JsonResponse({"status": "ok", "results": []})
 
@@ -591,25 +592,37 @@ def api_search(request):
     results = []
 
     if CACHE_READY:
-        for inst in CACHED_INSTRUMENTS:
-            if query == inst['ticker'].lower():
+        matches = [inst for inst in CACHED_INSTRUMENTS
+                   if (not shares_only or inst['type'] == 'share')
+                   and (inst['ticker'].lower().startswith(query) or query in inst['name'].lower())]
+        matches.sort(key=lambda inst: (
+            inst['ticker'].lower() != query,
+            not inst['ticker'].lower().startswith(query),
+            inst['type'] != 'share',
+            inst['class_code'] != 'TQBR',
+            inst['ticker'].lower(),
+        ))
+        seen = set()
+        for inst in matches:
+            if inst['ticker'] not in seen:
                 results.append(inst)
-
-        for inst in CACHED_INSTRUMENTS:
-            if inst not in results and (inst['ticker'].lower().startswith(query) or query in inst['name'].lower()):
-                results.append(inst)
+                seen.add(inst['ticker'])
             if len(results) >= 8:
                 break
-
-        results = sorted(results, key=lambda x: (x['class_code'] != 'TQBR', x['name']))
     else:
         try:
             with Client(INVEST_TOKEN) as client:
                 response = client.instruments.find_instrument(query=query)
-                sorted_instruments = sorted(response.instruments, key=lambda x: (getattr(x, 'class_code', '') != 'TQBR', getattr(x, 'name', '')))
+                sorted_instruments = sorted(response.instruments, key=lambda x: (
+                    (x.ticker or '').lower() != query,
+                    not (x.ticker or '').lower().startswith(query),
+                    x.instrument_type != 'share',
+                    getattr(x, 'class_code', '') != 'TQBR',
+                    x.ticker or '',
+                ))
                 seen_tickers = set()
                 for inst in sorted_instruments:
-                    if inst.instrument_type in ['share', 'etf', 'currency'] and inst.ticker not in seen_tickers:
+                    if inst.instrument_type in (['share'] if shares_only else ['share', 'etf', 'currency']) and inst.ticker not in seen_tickers:
                         if getattr(inst, 'api_trade_available_flag', True):
                             results.append({
                                 "figi": inst.figi,

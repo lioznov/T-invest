@@ -8,7 +8,7 @@
     /* Стили для переключателя бота */
     .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #344252; transition: .4s; border-radius: 20px; }
     .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
     input:checked + .slider { background-color: var(--primary); }
     input:focus + .slider { box-shadow: 0 0 1px var(--primary); }
@@ -25,7 +25,7 @@
     <div class="controls">
 
         <!-- Переключатель Telegram-бота -->
-        <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); margin-right: 10px;">
+        <div class="bot-control">
             <label for="botToggle" style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-dark);">Telegram-бот</label>
             <label class="switch">
                 <input type="checkbox" id="botToggle" onchange="updateBotState()">
@@ -36,7 +36,7 @@
         <!-- УМНЫЙ ПОИСК -->
         <div class="search-container">
             <span class="search-icon">⌕</span>
-            <input type="text" id="searchInput" class="search-input" placeholder="Поиск (тикер, имя)..." autocomplete="off" oninput="debounceSearch()">
+            <input type="text" id="searchInput" class="search-input" placeholder="Поиск (тикер, имя)..." autocomplete="off" aria-label="Поиск инструмента">
             <input type="hidden" id="figiInput" value="BBG004730N88">
             <div id="searchDropdown" class="search-dropdown"></div>
         </div>
@@ -113,7 +113,6 @@
     let trackerInterval = null, chart = null, candleSeries = null;
     let currentHistoricalCandle = null, isFetching = false, isChartBroken = false;
     let currentDepth = 50;
-    let searchTimeout = null;
 
     // === 1. Читаем состояние из памяти браузера (по умолчанию false) ===
     let isBotEnabled = localStorage.getItem('investpro_bot_enabled') === 'true';
@@ -124,56 +123,18 @@
         localStorage.setItem('investpro_bot_enabled', isBotEnabled);
     }
 
-    function debounceSearch() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(performSearch, 500);
-    }
-
-    function performSearch() {
-        const query = document.getElementById('searchInput').value;
-        const dropdown = document.getElementById('searchDropdown');
-
-        if (query.length < 2) {
-            dropdown.style.display = 'none';
-            return;
-        }
-
-        fetch(`/api/search/?q=${query}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'ok' && data.results.length > 0) {
-                    dropdown.innerHTML = '';
-                    data.results.forEach(item => {
-                        dropdown.innerHTML += `
-                            <div class="search-item" onclick="selectInstrument('${item.figi}', '${item.ticker}', '${item.name}')">
-                                <span class="search-item-ticker">${item.ticker} (${item.type})</span>
-                                <span class="search-item-name">${item.name}</span>
-                            </div>
-                        `;
-                    });
-                    dropdown.style.display = 'block';
-                } else {
-                    dropdown.innerHTML = '<div class="search-item"><span class="search-item-name">Ничего не найдено</span></div>';
-                    dropdown.style.display = 'block';
-                }
-            });
-    }
-
-    function selectInstrument(figi, ticker, name) {
-        document.getElementById('figiInput').value = figi;
-        document.getElementById('searchInput').value = ticker;
-        document.getElementById('searchDropdown').style.display = 'none';
-
-        document.getElementById('displayTicker').innerText = ticker;
-        document.getElementById('iconTicker').innerText = ticker.charAt(0).toUpperCase();
-
-        startTracking();
-    }
-
-    document.addEventListener('click', function(e) {
-        if (!document.getElementById('searchInput').contains(e.target)) {
-            document.getElementById('searchDropdown').style.display = 'none';
-        }
+    document.addEventListener('DOMContentLoaded', () => {
+        InstrumentSearch.attach({
+            input: document.getElementById('searchInput'),
+            dropdown: document.getElementById('searchDropdown'),
+            onSelect: item => {
+                document.getElementById('figiInput').value = item.figi;
+                document.getElementById('searchInput').value = item.ticker;
+                document.getElementById('displayTicker').textContent = item.ticker;
+                document.getElementById('iconTicker').textContent = item.ticker.charAt(0).toUpperCase();
+                startTracking();
+            }
+        });
     });
 
     function initChart() {

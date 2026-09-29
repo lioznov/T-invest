@@ -3,52 +3,27 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>ИНВЕСТПРО — Терминал</title>
-    <!-- Шрифт Inter из макета -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>vorby pro — {{ page_title|default:'Терминал' }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- ПРАВИЛЬНОЕ подключение CSS в Django -->
+    <link rel="stylesheet" href="{% static 'css/signals.css' %}?v=5">
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20260911-strict-2">
+    <link rel="stylesheet" href="{% static 'css/legacy_shell.css' %}?v=1">
+    <link rel="stylesheet" href="{% static 'css/instrument_search.css' %}?v=1">
 
     {% block extra_head %}{% endblock %}
 </head>
 <body>
 
-    <!-- Фоновые свечения -->
-    <div class="bg-glow glow-top-right"></div>
-    <div class="bg-glow glow-bottom-left"></div>
-
-    <div class="container">
-        <!-- НАВИГАЦИЯ В СТИЛЕ МАКЕТА -->
-        <!-- НАВИГАЦИЯ В СТИЛЕ МАКЕТА -->
-        <header class="header" id="header">
-            <!-- Левый блок: Логотип -->
-            <div class="logo"><strong>vorby</strong> pro</div>
-
-            <!-- Центральный блок: Навигация -->
-                <div class="nav-links">
-                    <!-- Твой текущий терминал (один стакан + график) -->
-                    <a href="/" class="nav-item {% block nav_terminal %}{% endblock %}">Терминал</a>
-
-                    <!-- НОВАЯ ССЫЛКА НА ГАЛЕРЕЮ СТАКАНОВ -->
-                    <a href="/radar/" class="nav-item {% block nav_radar %}{% endblock %}">Радар</a>
-
-                    <!-- Твой портфель -->
-                    <a href="/portfolio/" class="nav-item {% block nav_portfolio %}{% endblock %}">Портфель</a>
-                </div>
-
-            <!-- Правый блок: Профиль (создает баланс для центровки) -->
-            <div class="user-profile">
-                <span class="user-name">Профиль</span>
-                <div class="avatar">П</div>
-            </div>
-        </header>
-
-        <!-- Место под уникальные страницы -->
-        {% block content %}{% endblock %}
-    </div>
-
-    <!-- ПРАВИЛЬНОЕ подключение JS в Django -->
+    {% include "_app_sidebar.html" with active_page=page_id %}
+    <main class="legacy-main">
+        <header class="topbar"><div class="breadcrumb">Рабочее пространство <span>/</span> {{ page_title|default:'Терминал' }}</div><div class="top-status"><span class="tiny-dot"></span> Режим наблюдения</div></header>
+        <div class="workspace legacy-workspace">
+            <div class="page-heading"><div><p class="eyebrow">VORBY RESEARCH / ИНСТРУМЕНТЫ</p><h1>{{ page_title|default:'Терминал' }}</h1><p class="subtitle">{{ page_description }}</p></div></div>
+            {% block content %}{% endblock %}
+        </div>
+    </main>
     <script src="{% static 'js/script.js' %}?v=20260911-strict-2"></script>
+    <script src="{% static 'js/instrument_search.js' %}?v=1"></script>
 </body>
 </html>

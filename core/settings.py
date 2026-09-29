@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 # Загружаем секретные переменные из файла .env
-load_dotenv()
+load_dotenv(os.getenv('INVEST_ENV_FILE', Path(__file__).resolve().parent.parent / '.env'))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

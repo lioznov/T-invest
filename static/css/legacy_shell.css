@@ -1,0 +1,30 @@
+/* The legacy tools use the same workspace shell as the research pages. */
+body { background: #0c1016; }
+body::before, body::after, .bg-glow { display: none; }
+.sidebar { z-index: 110; }
+.sidebar .brand, .sidebar .nav-link { text-decoration: none; }
+.sidebar .brand-mark { border-radius: 9px; }
+.sidebar .nav-link.active { background: #1b302e; color: #77dbbf; }
+.sidebar .avatar { width: 30px; height: 30px; border: 0; box-shadow: none; background: #273446; color: #bac9de; }
+.legacy-main { min-width: 0; margin-left: 224px; }
+.legacy-main .topbar { background: #0c1016; }
+.legacy-workspace { width: 100%; max-width: 1570px; min-height: calc(100vh - 68px); margin: auto; padding: 34px; }
+.legacy-workspace .page-heading { margin-bottom: 22px; }
+.legacy-workspace .page-heading h1 { font-size: 28px; margin: 0 0 8px; color: #e6edf6; }
+.legacy-workspace .page-heading .subtitle { font-size: 12px; color: #8997ab; }
+.legacy-workspace .panel { background: #131a23; border-color: #25303e; box-shadow: none; }
+.legacy-workspace .controls-bar { margin-top: 0 !important; overflow: visible; }
+.legacy-workspace .search-dropdown { width: max-content; min-width: 100%; max-width: min(420px, 90vw); }
+.legacy-workspace .search-item { border: 0; width: 100%; text-align: left; background: transparent; }
+.legacy-workspace .search-item:hover, .legacy-workspace .search-item[aria-selected="true"] { background: #1b302e; }
+.legacy-workspace .search-item-ticker { color: #e6edf6; }
+.legacy-workspace .search-item-name { color: #8997ab; }
+.legacy-workspace .watchlist-btn, .legacy-workspace .watchlist-content { background: #151e29; color: #e6edf6; border-color: #2d3a49; box-shadow: 0 16px 30px #0005; }
+.legacy-workspace .watchlist-btn:hover { background: #202b38; }
+.legacy-workspace .watchlist-item { border-color: #25303e; }
+.legacy-workspace .watchlist-item-price { color: #d9e3f0; }
+.legacy-workspace .bot-control { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 8px; border: 1px solid #334052; background: #18222d; }
+.legacy-workspace .bot-control label { color: #d9e3f0; }
+@media (max-width:1200px) { .sidebar { width: 190px; padding-left: 12px; padding-right: 12px; } .legacy-main { margin-left: 190px; } .legacy-workspace { padding: 24px; } }
+@media (max-width:850px) { .sidebar { position: static; width: 100%; padding: 14px 20px; display: block; border-right: 0; border-bottom: 1px solid #25303e; } .sidebar .brand { padding: 0 0 15px; } .sidebar nav { display: flex; gap: 5px; overflow: auto; } .sidebar .nav-link { padding: 8px 12px; white-space: nowrap; font-size: 12px; } .sidebar .nav-caption, .sidebar .sidebar-note, .sidebar .sidebar-bottom { display: none; } .legacy-main { margin-left: 0; } .legacy-main .topbar { height: 48px; } }
+@media (max-width:540px) { .legacy-workspace { padding: 20px 14px; } .legacy-main .topbar { padding: 0 14px; } .legacy-workspace .page-heading h1 { font-size: 25px; } }
