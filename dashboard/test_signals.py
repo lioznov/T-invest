@@ -163,8 +163,8 @@ class ForwardReviewTests(TestCase):
     def test_uses_next_hour_quote_and_both_sides_of_costs(self):
         def row(minutes, decision, score, bid, ask):
             return ((NOW+timedelta(minutes=minutes)).isoformat(),
-                    {"review_ready":True,"decision":decision,"score":score,
-                     "book":{"bids":[[bid,10]],"asks":[[ask,10]]}})
+                    {"strategy_version":"six_rules_v1","review_ready":True,"decision":decision,"score":score,
+                     "book":{"time":(NOW+timedelta(minutes=minutes)).isoformat(),"bids":[[bid,10]],"asks":[[ask,10]]}})
         rows=[row(0,"LONG",100,100,101),row(30,"WAIT",20,120,121),
               row(60,"WAIT",40,103,104),row(120,"WAIT",40,99,100)]
         free=review_observations(rows,0,0)
@@ -179,8 +179,8 @@ class ForwardReviewTests(TestCase):
     def test_missing_or_legacy_observations_cannot_create_an_outcome(self):
         def row(minutes, ready=True):
             return ((NOW+timedelta(minutes=minutes)).isoformat(),
-                    {"review_ready":ready,"decision":"LONG","score":100,
-                     "book":{"bids":[[100,1]],"asks":[[101,1]]}})
+                    {"strategy_version":"six_rules_v1","review_ready":ready,"decision":"LONG","score":100,
+                     "book":{"time":(NOW+timedelta(minutes=minutes)).isoformat(),"bids":[[100,1]],"asks":[[101,1]]}})
         report=review_observations([row(0),row(59),row(71),row(120,False)])
         self.assertEqual(report["completed"],0)
         self.assertEqual(report["buy_candidates"]["samples"],0)
@@ -190,8 +190,8 @@ class ForwardReviewTests(TestCase):
         rows=[]
         for minutes,decision in ((0,"WAIT"),(30,"LONG"),(90,"WAIT")):
             rows.append(((NOW+timedelta(minutes=minutes)).isoformat(),
-                         {"review_ready":True,"decision":decision,"score":100 if decision=="LONG" else 40,
-                          "book":{"bids":[[100,1]],"asks":[[101,1]]}}))
+                         {"strategy_version":"six_rules_v1","review_ready":True,"decision":decision,"score":100 if decision=="LONG" else 40,
+                          "book":{"time":(NOW+timedelta(minutes=minutes)).isoformat(),"bids":[[100,1]],"asks":[[101,1]]}}))
         report=review_observations(rows)
         self.assertEqual(report["candidate_events"],1)
         self.assertEqual(report["buy_candidates"]["samples"],1)

@@ -99,7 +99,9 @@ def live_snapshot(ticker, previous=None, now=None):
         tape = client.market_data.get_last_trades(instrument_id=uid,from_=now-timedelta(minutes=5),to=now,
                                                  trade_source=TradeSourceType.TRADE_SOURCE_EXCHANGE)
         status = client.market_data.get_trading_status(instrument_id=uid)
-    book = {"time":ob.orderbook_ts,"bids":[[number(x.price),x.quantity] for x in ob.bids],
+    consistent = getattr(ob, "is_consistent", None)
+    book = {"time":ob.orderbook_ts,"is_consistent": consistent if isinstance(consistent, bool) else None,
+            "bids":[[number(x.price),x.quantity] for x in ob.bids],
             "asks":[[number(x.price),x.quantity] for x in ob.asks]}
     books = [b for b in previous.get("books",[]) if b["time"]>=now-timedelta(seconds=120)]
     if not books or book["time"]>books[-1]["time"]: books.append(book)

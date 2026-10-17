@@ -8,7 +8,8 @@ from contextlib import closing
 from pathlib import Path
 
 from django.conf import settings
-from .market_provider import demo_snapshot, live_snapshot, error_message
+from .market_provider import demo_snapshot, error_message
+from .market_stream_provider import live_snapshot, apply_quality_guard
 from .signals import analyse, backtest, valid_book
 from .history_archive import load_long_history
 
@@ -28,12 +29,26 @@ def archive(ticker, snapshot, analysis):
         db.execute("CREATE TABLE IF NOT EXISTS paper_observations (ticker TEXT, at TEXT, payload TEXT, PRIMARY KEY(ticker,at))")
         book = snapshot.get("books", [])[-1] if snapshot.get("books") else {}
         ready = (snapshot.get("trading", False) and valid_book(book)
+                 and not snapshot.get("data_quality", {}).get("action_blocked")
                  and not any("Недостаточно свежих рыночных данных" in reason
                              for reason in analysis["blockers"]))
         payload = {"book":book,"trades":snapshot.get("trades", []),
                    "decision":analysis["decision"],"score":analysis["score"],
                    "review_ready":bool(ready), "strategy_version":SIGNAL_VERSION,
-                   "plan":analysis.get("plan"), "instrument":snapshot.get("instrument", {})}
+                   "plan":analysis.get("plan"), "instrument":snapshot.get("instrument", {}),
+                   "provider_version":snapshot.get("provider_version", "legacy"),
+                   "data_quality":snapshot.get("data_quality", {})}
+        extra_patterns = analysis.get("candle_patterns", {})
+        payload.update(candle_pattern_version=extra_patterns.get("version"),
+                       candle_pattern_evaluated_at=extra_patterns.get("evaluated_at"),
+                       candle_pattern_keys=[item["key"] for item in extra_patterns.get("items", []) if item.get("detected")],
+                       candle_pattern_entry_allowed=False)
+        patterns = analysis.get("patterns", {})
+        payload.update(pattern_version=patterns.get("version"),
+                       pattern_evaluated_at=patterns.get("evaluated_at"),
+                       pattern_keys=[item["key"] for item in patterns.get("items", []) if item.get("detected")],
+                       pattern_market_confirmed=patterns.get("market_confirmed", False),
+                       pattern_entry_allowed=False)
         db.execute("INSERT OR IGNORE INTO observations VALUES (?,?,?)", (ticker,analysis["updated_at"],json.dumps(payload,default=lambda x:x.isoformat())))
         compact = {key:value for key,value in payload.items() if key != "trades"}
         compact["book"] = {"time":book.get("time"), "bids":book.get("bids", [])[:1], "asks":book.get("asks", [])[:1]}
@@ -49,6 +64,14 @@ def update(key):
     try:
         snapshot = demo_snapshot(ticker) if mode=="demo" else live_snapshot(ticker,previous)
         analysis = analyse(snapshot)
+        from .candle_pattern_panel import candle_panel
+        analysis["candle_patterns"] = candle_panel(snapshot)
+        from .range_levels import range_levels
+        analysis["range_levels"] = range_levels(snapshot)
+        from .market_structure import chart_panel
+        analysis["market_structure"] = chart_panel(snapshot,mode)
+        if mode == "live":
+            apply_quality_guard(analysis, snapshot)
         if mode=="live":
             try:
                 archive(ticker,snapshot,analysis)
@@ -56,6 +79,8 @@ def update(key):
                 analysis["blockers"].append("Не удалось сохранить наблюдения на диск. История стакана не записана.")
                 analysis["decision"] = "WAIT"
                 analysis["plan"] = None
+        from .ai_service import analyze_snapshot
+        analysis["ai"] = analyze_snapshot(snapshot,mode)
         response={"status":"ok","mode":mode,"instrument":snapshot["instrument"],"analysis":analysis,
                   "source":"Синтетические учебные данные" if mode=="demo" else "Т-Банк · TQBR", "trading_status":snapshot["trading_status"]}
         with LOCK:

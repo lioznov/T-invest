@@ -18,7 +18,7 @@ START = datetime(2026, 9, 25, 9, tzinfo=timezone.utc)
 
 def row(seconds, decision="LONG", bid=99.9, ask=100, **changes):
     at = START + timedelta(seconds=seconds)
-    payload = {"strategy_version": STRATEGY_VERSION, "review_ready": True, "decision": decision,
+    payload = {"strategy_version": STRATEGY_VERSION, "provider_version": "stream_exchange_v1", "review_ready": True, "decision": decision,
                "book": {"time": at.isoformat(), "bids": [[bid, 10]], "asks": [[ask, 10]]},
                "plan": {"entry": 100, "stop": 98, "target": 104, "risk_per_share": 2},
                "instrument": {"ticker": "SBER", "lot": 10}}

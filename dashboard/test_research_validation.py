@@ -1,9 +1,17 @@
 """Checks for chronological research splits, execution timing and cost sensitivity."""
+import json
+import sqlite3
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from math import prod
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
+from django.test import override_settings
+
+from .forward_review import STRATEGY_VERSION, load_review, review_observations
 from .signals import Candle, backtest, chronological_validation, features, simulate
 
 
@@ -139,3 +147,99 @@ class ResearchValidationTests(TestCase):
             report = backtest(flat_candles(500))
         self.assertEqual(report["validation"]["status"], "ok")
         self.assertEqual(calculate.call_count, 1)
+
+
+class ForwardEvidenceValidationTests(TestCase):
+    def row(self, seconds, *, version=STRATEGY_VERSION, book_offset=0,
+            decision="WAIT", bid=100, ask=101):
+        at = START + timedelta(seconds=seconds)
+        payload = {"strategy_version": version, "review_ready": True,
+                   "decision": decision, "score": 100 if decision == "LONG" else 20,
+                   "book": {"time": (at + timedelta(seconds=book_offset)).isoformat(),
+                            "bids": [[bid, 10]], "asks": [[ask, 10]]}}
+        return at.isoformat(), payload
+
+    def test_legacy_and_other_versions_are_excluded_even_when_marked_ready(self):
+        legacy = self.row(5, decision="LONG", bid=10, ask=11)
+        legacy[1].pop("strategy_version")
+        rows = [self.row(0, decision="LONG"), legacy,
+                self.row(10, version="other_rules", decision="LONG", bid=10, ask=11),
+                self.row(3600, bid=103, ask=104)]
+        report = review_observations(rows, 0, 0)
+        self.assertEqual(report["strategy_version"], STRATEGY_VERSION)
+        self.assertEqual(report["excluded_legacy_observations"], 2)
+        self.assertEqual(report["observations"], 2)
+        self.assertEqual(report["buy_candidates"]["samples"], 1)
+        self.assertAlmostEqual(report["buy_candidates"]["average_pct"], (103/101-1)*100)
+
+    def test_legacy_only_cannot_report_old_profit_for_current_rules(self):
+        rows = [self.row(0, version=None, decision="LONG"),
+                self.row(3600, version=None, bid=200, ask=201)]
+        report = review_observations(rows, 0, 0)
+        self.assertEqual(report["excluded_legacy_observations"], 2)
+        self.assertEqual(report["observations"], 0)
+        self.assertEqual(report["completed"], 0)
+        self.assertEqual(report["candidate_events"], 0)
+        self.assertEqual(report["buy_candidates"]["samples"], 0)
+        self.assertIsNone(report["buy_candidates"]["average_pct"])
+
+    def test_old_and_future_books_cannot_create_a_signal_or_outcome(self):
+        for offset in (-45.000001, -90, 1):
+            with self.subTest(offset=offset):
+                rows = [self.row(0, decision="LONG", book_offset=offset),
+                        self.row(3600, bid=200, ask=201)]
+                report = review_observations(rows, 0, 0)
+                self.assertEqual(report["observations"], 1)
+                self.assertEqual(report["candidate_events"], 0)
+                self.assertEqual(report["buy_candidates"]["samples"], 0)
+                self.assertEqual(report["excluded_invalid_book_observations"], 1)
+
+    def test_45_second_old_entry_book_and_correct_later_quote_are_allowed(self):
+        rows = [self.row(0, decision="LONG", book_offset=-45),
+                self.row(3630, book_offset=-30, bid=103, ask=104)]
+        report = review_observations(rows, 0, 0)
+        self.assertEqual(report["observations"], 2)
+        self.assertEqual(report["completed"], 1)
+        self.assertEqual(report["buy_candidates"]["samples"], 1)
+        self.assertAlmostEqual(report["buy_candidates"]["average_pct"], (103/101-1)*100)
+
+    def test_later_recording_with_pre_horizon_book_skips_to_actual_later_quote(self):
+        rows = [self.row(0, decision="LONG"),
+                self.row(3600, book_offset=-1, bid=200, ask=201),
+                self.row(3630, bid=103, ask=104)]
+        report = review_observations(rows, 0, 0)
+        self.assertEqual(report["buy_candidates"]["samples"], 1)
+        self.assertAlmostEqual(report["buy_candidates"]["average_pct"], (103/101-1)*100)
+        incomplete = review_observations(rows[:2], 0, 0)
+        self.assertEqual(incomplete["buy_candidates"]["samples"], 0)
+
+    def test_missing_naive_or_invalid_book_timestamps_are_rejected(self):
+        for value in (None, "invalid", "2026-01-01T00:00:00"):
+            with self.subTest(value=value):
+                row = self.row(0, decision="LONG")
+                row[1]["book"]["time"] = value
+                report = review_observations([row, self.row(3600)])
+                self.assertEqual(report["observations"], 1)
+                self.assertEqual(report["candidate_events"], 0)
+
+    def test_loader_preserves_book_time_and_counts_legacy_without_modifying_archive(self):
+        with TemporaryDirectory() as directory:
+            data = Path(directory) / "data"
+            data.mkdir()
+            path = data / "market.sqlite3"
+            rows = [self.row(0, decision="LONG"), self.row(3600, bid=103, ask=104),
+                    self.row(5, version=None, decision="LONG")]
+            for _, payload in rows:
+                payload["provider_version"] = "stream_exchange_v1"
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("CREATE TABLE observations (ticker TEXT, at TEXT, payload TEXT)")
+                db.executemany("INSERT INTO observations VALUES (?,?,?)",
+                               [("SBER", at, json.dumps(payload)) for at, payload in rows])
+            before = path.read_bytes()
+            with override_settings(BASE_DIR=Path(directory)):
+                report = load_review("SBER", 0, 0)
+            self.assertEqual(report["strategy_version"], STRATEGY_VERSION)
+            self.assertEqual(report["excluded_legacy_observations"], 1)
+            self.assertEqual(report["buy_candidates"]["samples"], 1)
+            self.assertAlmostEqual(report["buy_candidates"]["average_pct"], (103/101-1)*100)
+            self.assertEqual(path.read_bytes(), before)
