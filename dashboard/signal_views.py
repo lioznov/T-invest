@@ -14,6 +14,17 @@ def page(request, watchlist=False):
     return render(request,"signals.html",{"watchlist":watchlist,"has_token":bool(os.getenv("INVEST_TOKEN"))})
 
 
+@require_GET
+def monitor_health(request):
+    from pathlib import Path
+    from django.conf import settings
+    from .continuous_watch import load_health
+    result = load_health(Path(settings.BASE_DIR)/"data"/"watch")
+    response = JsonResponse(result)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 def arguments(request):
     mode=request.GET.get("mode","live")
     ticker=request.GET.get("ticker","SBER").strip().upper()
@@ -28,7 +39,20 @@ def signal(request):
         mode,ticker=arguments(request)
     except ValueError as exc:
         return JsonResponse({"status":"error","message":str(exc)},status=400)
-    response=JsonResponse(get_signal(mode,ticker))
+    from .ai_service import expire_payload
+    from .structure_research import expire_structure_payload
+    from .technical_context import expire_payload as expire_technical
+    response=JsonResponse(expire_technical(expire_structure_payload(expire_payload(get_signal(mode,ticker)))))
+    response["Cache-Control"]="no-store"
+    return response
+
+
+@require_GET
+def ai_model(request):
+    from .ai_service import model_status
+    from .neural_service import model_status as neural_status
+    from .technical_research import load_report as channel_report
+    response=JsonResponse({**model_status(),'neural':neural_status(),'technical_research':channel_report()})
     response["Cache-Control"]="no-store"
     return response
 
@@ -95,6 +119,37 @@ def risk(request):
             fee_bps=request.GET.get("fee", "5"), slippage_bps=request.GET.get("slip", "5"))
     except ValueError as exc:
         return JsonResponse({"status": "error", "message": str(exc)}, status=400)
+    response = JsonResponse(result)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@require_GET
+def pattern_research(request):
+    try:
+        mode, ticker = arguments(request)
+    except ValueError as exc:
+        return JsonResponse({"status": "error", "message": str(exc)}, status=400)
+    from .pattern_research import load_pattern_research
+    result = load_pattern_research(ticker) if mode == "live" else {
+        "status": "unavailable", "message": "Учебные паттерны не являются результатами проверки на реальном рынке."}
+    if mode == "live":
+        from .pattern_flow_research import load_pattern_flow_research
+        result["historical_flow"] = load_pattern_flow_research(ticker)
+        from .candle_pattern_research import load_candle_research
+        result["candlestick_v3"] = load_candle_research(ticker)
+        from .pressure_research import load_pressure_research
+        result["stream_pressure"] = load_pressure_research(ticker)
+        from .range_research import load_range_research
+        result["range_swing"] = load_range_research(ticker)
+        from .trader_tactics_research import load_trader_research
+        result["trader_tactics"] = load_trader_research(ticker)
+        from .joint_research import load_joint_research
+        result["joint_factors"] = load_joint_research(ticker)
+        from .monthly_research import load_monthly_research
+        result["monthly_momentum"] = load_monthly_research()
+        from .opening_activity_research import load_opening_research
+        result["opening_activity"] = load_opening_research(ticker)
     response = JsonResponse(result)
     response["Cache-Control"] = "no-store"
     return response

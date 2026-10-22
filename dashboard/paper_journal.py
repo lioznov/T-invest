@@ -78,7 +78,7 @@ def _cost(value):
     return value / 10000
 
 
-def review_paper_trades(rows, fee_bps=5, slippage_bps=5, now=None):
+def review_paper_trades(rows, fee_bps=5, slippage_bps=5, now=None, provider_version=None):
     """Replay one ticker in order; an observed LONG starts a pending paper entry.
 
     ``now`` bounds the replay, including tests/historical inspections. A newer
@@ -111,8 +111,9 @@ def review_paper_trades(rows, fee_bps=5, slippage_bps=5, now=None):
         active.update(status=status, reason=reason, reason_text=REASONS[reason])
 
     for at, payload in ordered:
-        version_ok = payload.get("strategy_version") == STRATEGY_VERSION
-        quote = _quote(payload, at) if payload.get("review_ready") is True else None
+        version_ok = (payload.get("strategy_version") == STRATEGY_VERSION
+                      and (not provider_version or payload.get("provider_version") == provider_version))
+        quote = _quote(payload, at) if payload.get("review_ready") is True and not payload.get("data_quality", {}).get("action_blocked") else None
 
         if active is not None:
             reference = last_covered_at if active["entry_at"] else _timestamp(active["signal_at"])
@@ -214,7 +215,7 @@ def review_paper_trades(rows, fee_bps=5, slippage_bps=5, now=None):
         "max_drawdown_pct": drawdown if closed else None,
     }
     return {
-        "status": "ok", "version": STRATEGY_VERSION, "summary": summary,
+        "status": "ok", "version": STRATEGY_VERSION, "provider_version": provider_version, "summary": summary,
         "trades": list(reversed(trades[-50:])), "fee_bps": fee_bps, "slippage_bps": slippage_bps,
         "coverage": {"first_at": eligible_times[0].isoformat() if eligible_times else None,
                      "last_at": eligible_times[-1].isoformat() if eligible_times else None,
@@ -237,17 +238,17 @@ def load_paper_journal(ticker, fee_bps=5, slippage_bps=5):
     """Read only an existing archive. Old observations cannot create new plans."""
     path = Path(settings.BASE_DIR) / "data" / "market.sqlite3"
     if not path.is_file():
-        return review_paper_trades([], fee_bps, slippage_bps)
+        return review_paper_trades([], fee_bps, slippage_bps, provider_version="stream_exchange_v1")
     try:
         with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
             tables = {row[0] for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('paper_observations', 'observations')"
             )}
             if not tables:
-                return review_paper_trades([], fee_bps, slippage_bps)
+                return review_paper_trades([], fee_bps, slippage_bps, provider_version="stream_exchange_v1")
             table = "paper_observations" if "paper_observations" in tables else "observations"
             rows = db.execute(f"SELECT at, payload FROM {table} WHERE ticker=? ORDER BY at",
                               (ticker,)).fetchall()
     except sqlite3.Error:
         return {"status": "error", "message": "Не удалось прочитать журнал учебных сделок."}
-    return review_paper_trades(rows, fee_bps, slippage_bps)
+    return review_paper_trades(rows, fee_bps, slippage_bps, provider_version="stream_exchange_v1")

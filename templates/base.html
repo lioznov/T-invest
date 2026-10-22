@@ -5,15 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>vorby pro — {{ page_title|default:'Терминал' }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/signals.css' %}?v=5">
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20260911-strict-2">
     <link rel="stylesheet" href="{% static 'css/legacy_shell.css' %}?v=1">
     <link rel="stylesheet" href="{% static 'css/instrument_search.css' %}?v=1">
 
     {% block extra_head %}{% endblock %}
+    {% include "_theme_head.html" %}
 </head>
-<body>
+<body data-page="{{ page_id|default:'terminal' }}">
 
     {% include "_app_sidebar.html" with active_page=page_id %}
     <main class="legacy-main">

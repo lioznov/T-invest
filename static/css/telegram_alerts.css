@@ -1,0 +1,22 @@
+.telegram-panel{margin:0 0 20px;min-width:0;padding:24px;box-sizing:border-box}
+.telegram-panel>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-weight:700;list-style:revert}
+.telegram-panel>summary>span:first-child{flex:1;min-width:160px}
+.telegram-panel>summary::after{content:'⌄';font-size:18px;color:var(--muted,#aaaab5)}
+.telegram-panel[open]>summary::after{content:'⌃'}
+.telegram-panel>summary:focus-visible{outline:2px solid var(--primary,#ffdd2d);outline-offset:5px}
+.telegram-form{display:grid;grid-template-columns:minmax(180px,1fr) auto auto;gap:16px;align-items:end;margin:18px 0}
+.telegram-symbols{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:13px;color:var(--muted,#aaaab5)}
+.telegram-symbols textarea{width:100%;min-width:0;box-sizing:border-box;resize:vertical;min-height:90px;font:inherit;color:var(--text,#eee);background:#111113;border:1px solid #444448;border-radius:12px;padding:12px;line-height:1.5}
+.telegram-symbols textarea:focus-visible{outline:2px solid var(--primary,#ffdd2d);outline-offset:2px}
+.telegram-items{max-height:520px;overflow-y:auto}
+.telegram-panel #telegram-more{margin-top:12px}
+.telegram-toggle{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;cursor:pointer}
+.telegram-toggle input{width:18px;height:18px;flex-shrink:0;accent-color:var(--primary,#ffdd2d)}
+.telegram-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:10px}
+.telegram-item{min-width:0;border:1px solid var(--border,#33333c);border-radius:10px;padding:12px;font-size:13px}
+.telegram-item p{margin:6px 0 0;overflow-wrap:anywhere}
+.telegram-panel .badge{flex-shrink:0;white-space:normal;text-align:right}
+.telegram-help{margin:14px 0;font-size:13px}
+.telegram-help code{display:block;overflow-wrap:anywhere;white-space:normal;border:1px solid var(--border,#33333c);border-radius:8px;padding:12px;margin:10px 0}
+@media(max-width:1100px){.telegram-form{grid-template-columns:minmax(0,1fr) auto}.telegram-symbols{grid-column:1/-1}}
+@media(max-width:600px){.telegram-panel{padding:18px}.telegram-form{grid-template-columns:minmax(0,1fr)}.telegram-panel>summary{align-items:flex-start;flex-wrap:wrap}.telegram-panel .badge{text-align:left}}

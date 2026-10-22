@@ -51,29 +51,32 @@
 {% endblock %}
 
 {% block content %}
-<div class="top-row">
+<p id="portfolioStatus" class="muted small" role="status">Запрашиваем портфель — без торговых операций.</p>
+<div class="top-row" id="portfolio-overview">
     <!-- Цифры -->
     <div class="panel summary-card">
         <div class="summary-item">
             <div>Общая стоимость портфеля</div>
-            <div class="summary-value" id="totalCost">0.00 ₽</div>
+            <div class="summary-value" id="totalCost">—</div>
         </div>
         <div class="summary-item">
             <div>Общая доходность</div>
-            <div class="summary-value" id="totalYield">0.00 ₽</div>
+            <div class="summary-value" id="totalYield">—</div>
         </div>
     </div>
 
     <!-- Кольцевой график -->
-    <div class="panel chart-card">
-        <div class="chart-wrapper">
+    <div class="panel chart-card is-empty" id="portfolio-chart-card" data-state="loading">
+        <div class="chart-wrapper" hidden>
             <canvas id="portfolioChart"></canvas>
         </div>
+        <p id="portfolioChartStatus" class="empty-chart-message">Получаем состав портфеля для диаграммы…</p>
     </div>
 </div>
 
 <div class="panel">
     <h3 style="margin-bottom: 15px; color: var(--text-dark);">Ваши активы</h3>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Активы портфеля: таблица с горизонтальной прокруткой">
     <table class="portfolio-table">
         <thead>
             <tr>
@@ -90,13 +93,28 @@
             <tr><td colspan="7" style="text-align: center; padding: 30px; color: #8997ab;">Загрузка портфеля...</td></tr>
         </tbody>
     </table>
+    </div>
 </div>
 
 <script>
     const TYPE_NAMES = { 'share': 'Акции', 'currency': 'Валюта', 'bond': 'Облигации', 'etf': 'Фонды', 'futures': 'Фьючерсы', 'other': 'Другое' };
     let portfolioChart = null;
 
+    function portfolioChartState(state,message) {
+        const ready=state==='ready';
+        const card=document.getElementById('portfolio-chart-card');
+        card.dataset.state=state;
+        card.classList.toggle('is-empty',!ready);
+        document.getElementById('portfolio-overview').classList.toggle('has-chart',ready);
+        card.querySelector('.chart-wrapper').hidden=!ready;
+        const status=document.getElementById('portfolioChartStatus');
+        status.hidden=ready;
+        status.textContent=message||'';
+    }
+
     function renderChart(positions) {
+        if (!positions.length) { portfolioChartState('empty','В портфеле нет позиций для диаграммы.'); return; }
+        if (typeof Chart === 'undefined') { portfolioChartState('unavailable','Библиотека диаграммы недоступна. Данные активов показаны в таблице.'); return; }
         const typeTotals = {};
         positions.forEach(p => {
             const key = p.instrument_type || 'other';
@@ -109,13 +127,15 @@
         if (portfolioChart) portfolioChart.destroy();
         const ctx = document.getElementById('portfolioChart').getContext('2d');
 
+        portfolioChartState('ready','');
+        try {
         portfolioChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: labels,
                 datasets: [{
                     data: dataValues,
-                    backgroundColor: ['#268c7a', '#3eb28f', '#7185a6', '#d9ad56', '#9481a8', '#628da6'],
+                    backgroundColor: ['#8ca5ff', '#80c8b3', '#c1a5e8', '#dfc18e', '#e6a1ad', '#739bc8'],
                     borderColor: 'transparent',
                     borderWidth: 0,
                     borderRadius: 10,
@@ -145,13 +165,17 @@
                 }
             }
         });
+        } catch {
+            portfolioChartState('unavailable','Не удалось построить диаграмму. Данные активов доступны в таблице.');
+        }
     }
 
     function loadPortfolio() {
-        fetch('/api/portfolio/')
+        fetch('/api/portfolio/', {signal: AbortSignal.timeout(15000)})
             .then(res => res.json())
             .then(data => {
-                if (data.status === "error") return;
+                if (data.status === "error") throw new Error('Portfolio unavailable');
+                document.getElementById('portfolioStatus').textContent = 'Данные счёта получены. Только просмотр.';
 
                 document.getElementById('totalCost').innerText = data.total_portfolio_cost.toLocaleString('ru-RU', {style: 'currency', currency: 'RUB'});
 
@@ -184,6 +208,12 @@
                         </tr>
                     `;
                 });
+                if (!data.positions.length) tbody.innerHTML = '<tr><td colspan="7">В полученном портфеле нет позиций.</td></tr>';
+            }).catch(() => {
+                portfolioChartState('unavailable','Диаграмма недоступна: не удалось получить состав портфеля.');
+                document.getElementById('portfolioStatus').className='notice';
+                document.getElementById('portfolioStatus').textContent = 'Не удалось получить портфель. Проверь подключение к API и доступ токена. Неизвестные суммы не заменяются нулями.';
+                document.getElementById('portfolioBody').innerHTML = '<tr><td colspan="7">Данные счёта недоступны. Обнови страницу позже.</td></tr>';
             });
     }
 

@@ -1,12 +1,14 @@
 """Keep a small read-only watchlist observed while the browser is closed."""
 import re
+import logging
 import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 from django.core.management.base import BaseCommand, CommandError
 
-from dashboard.market_provider import error_message, live_snapshot
+from dashboard.market_provider import error_message
+from dashboard.market_stream_provider import live_snapshot, apply_quality_guard
 from dashboard.signal_service import archive
 from dashboard.signals import analyse
 
@@ -18,6 +20,7 @@ class Command(BaseCommand):
         parser.add_argument('--tickers', nargs='+', default=['SBER', 'GAZP', 'LKOH'])
         parser.add_argument('--interval', type=int, default=30, help='Seconds between rounds, 30–40')
         parser.add_argument('--once', action='store_true', help='Fetch one round and exit')
+        parser.add_argument('--seconds', type=int, default=0, help='Stop after this budget; 0 keeps foreground legacy behavior')
 
     def handle(self, *args, **options):
         symbols = list(dict.fromkeys(t.upper() for t in options['tickers']))
@@ -27,6 +30,13 @@ class Command(BaseCommand):
         interval = options['interval']
         if not 30 <= interval <= 40:
             raise CommandError('Интервал должен быть от 30 до 40 секунд для проверки устойчивости стакана.')
+        seconds = options['seconds']
+        if not 0 <= seconds <= 86400:
+            raise CommandError('Срок наблюдения должен быть от 0 до 86400 секунд.')
+        deadline = time.monotonic()+seconds if seconds else float('inf')
+        logger = logging.getLogger('t_tech.invest')
+        previous_level = logger.level
+        logger.setLevel(logging.CRITICAL)
         previous = {}
         last_state = {}
         self.stdout.write('Наблюдаем: ' + ', '.join(symbols) + '. Остановить: Ctrl+C.')
@@ -39,7 +49,7 @@ class Command(BaseCommand):
 
         try:
             with ThreadPoolExecutor(max_workers=min(3, len(symbols))) as pool:
-                while True:
+                while time.monotonic() < deadline:
                     started = time.monotonic()
                     fetched = 0
                     trading = 0
@@ -50,6 +60,9 @@ class Command(BaseCommand):
                             fetched += 1
                             trading += bool(snapshot.get('trading'))
                             analysis = analyse(snapshot)
+                            from dashboard.candle_pattern_panel import candle_panel
+                            analysis['candle_patterns'] = candle_panel(snapshot)
+                            apply_quality_guard(analysis, snapshot)
                             try:
                                 archive(ticker, snapshot, analysis)
                             except (OSError, sqlite3.Error):
@@ -63,8 +76,10 @@ class Command(BaseCommand):
                     if options['once']:
                         break
                     pause = interval if trading else 300 if fetched else 60
-                    remaining = pause - (time.monotonic() - started)
+                    remaining = min(pause - (time.monotonic() - started), deadline-time.monotonic())
                     if remaining > 0:
                         time.sleep(remaining)
         except KeyboardInterrupt:
             self.stdout.write('Наблюдение остановлено.')
+        finally:
+            logger.setLevel(previous_level)

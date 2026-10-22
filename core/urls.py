@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.urls import path
 from dashboard import signal_views
+from dashboard import news_views
+from dashboard import telegram_views
 
 
 def legacy(name):
@@ -22,8 +24,16 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', signal_views.page, name='home'),
     path('watchlist/', signal_views.page, {'watchlist': True}, name='watchlist'),
+    path('news/', news_views.page, name='news'),
+    path('api/news/', news_views.feed, name='news_feed'),
+    path('api/news/calendar/',news_views.calendar,name='news_calendar'),
+    path('api/news/reaction/',news_views.reaction,name='news_reaction'),
     path('api/signals/', signal_views.signal, name='signals'),
+    path('api/telegram-alerts/', telegram_views.alerts, name='telegram_alerts'),
+    path('api/ai-model/', signal_views.ai_model, name='ai_model'),
+    path('api/monitor-health/', signal_views.monitor_health, name='monitor_health'),
     path('api/research/', signal_views.research, name='research'),
+    path('api/pattern-research/', signal_views.pattern_research, name='pattern_research'),
     path('api/forward/', signal_views.forward, name='forward'),
     path('api/paper/', signal_views.paper, name='paper'),
     path('api/risk/', signal_views.risk, name='risk'),

@@ -1,0 +1,18 @@
+<details class="panel telegram-panel" id="telegram-panel">
+  <summary><span>Telegram · кандидаты покупки</span><span class="badge" id="telegram-badge">Проверяем настройки</span></summary>
+  <p class="muted">Тот же бот и чат, что у радара. При совпадении всех шести условий придут тикер, цена по снимку, стоп и цель. Только покупки, без шорта и без выставления заявок.</p>
+  <form id="telegram-form" class="telegram-form">
+    {% csrf_token %}
+    <label class="telegram-symbols">Акции для наблюдения — без лимита по количеству<textarea id="telegram-tickers" name="tickers" rows="3" placeholder="SBER, GAZP, LKOH — через запятую или с новой строки" autocomplete="off" required>SBER</textarea></label>
+    <label class="telegram-toggle"><input id="telegram-enabled" type="checkbox">Присылать кандидатов</label>
+    <button id="telegram-save" class="button primary" type="submit" disabled>Сохранить</button>
+  </form>
+  <p id="telegram-status" class="research-meta" role="status">Читаем настройки сервера…</p>
+  <p id="telegram-coverage" class="research-meta" role="status"></p>
+  <div id="telegram-items" class="telegram-items" aria-live="polite"></div>
+  <button id="telegram-more" class="button ghost" type="button" hidden>Показать ещё 50</button>
+  <p class="muted small">Этот список отдельный от обзора акций. Закрыть вкладку можно, но компьютер и сервер должны работать. Нужен запущенный сборщик биржевого стакана и ленты; без него вход заблокирован. Учебный режим графика не меняет этот список: уведомления всегда только по реальному рынку.</p>
+  <details class="telegram-help"><summary>Как запустить сборщик стакана?</summary><p class="muted small">Сначала сохрани список. В отдельном терминале PyCharm из папки с manage.py запусти команду ниже. Она прочитает сохранённые тикеры. Сервер сайта оставь работать; прежний сборщик перед запуском останови через Ctrl+C. Сбор ограничен 8 часами и 1 ГБ. После изменения списка перезапусти сборщик.</p><code id="telegram-collector-command">python manage.py watch_telegram --seconds 28800</code></details>
+  <p class="muted small">Большой список — не одновременное наблюдение без ограничений. Стакан и лента собираются группами до 50 акций; при большем списке группа меняется раз в 15 минут. Вне активной группы акция не анализируется. Сам анализ идёт очередью до 3 акций: короткий импульс может быть пропущен. Больший охват не означает большую прибыль.</p>
+  <p class="muted small">Один сигнал на непрерывное совпадение условий. Новый — после их сброса и не раньше чем через 30 минут. При неясном ответе Telegram повтор отключён: возможен пропуск. Прибыльность алгоритма не доказана; это не рекомендация ИИ.</p>
+</details>

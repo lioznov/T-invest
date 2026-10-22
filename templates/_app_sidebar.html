@@ -1,14 +1,15 @@
 <aside class="sidebar">
-  <a class="brand" href="/"><span class="brand-mark">v</span><strong>vorby<span>pro</span></strong></a>
-  <div class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+  <a class="brand" href="/" aria-label="Vorby Pro — главная"><span class="brand-mark">v</span><strong>vorby<span>PRO</span></strong></a>
+  <div class="nav-caption">ЛИЧНЫЙ ТЕРМИНАЛ</div>
   <nav aria-label="Основная навигация">
-    <a href="/" class="nav-link {% if active_page == 'single' %}active{% endif %}"><span>⌁</span>Анализ акции</a>
-    <a href="/watchlist/" class="nav-link {% if active_page == 'watchlist' %}active{% endif %}"><span>▦</span>Обзор акций</a>
+    <a href="/" class="nav-link {% if active_page == 'single' %}active{% endif %}" {% if active_page == 'single' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 14l4-5 4 3 4-7"/><path d="M16 5h4v4"/></svg></span><span class="nav-text">Анализ акции</span><i></i></a>
+    <a href="/watchlist/" class="nav-link {% if active_page == 'watchlist' %}active{% endif %}" {% if active_page == 'watchlist' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span class="nav-text">Обзор рынка</span><i></i></a>
+    <a href="/news/" class="nav-link {% if active_page == 'news' %}active{% endif %}" {% if active_page == 'news' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h4v4H7zM15 8h2M15 12h2M7 16h10"/></svg></span><span class="nav-text">Новости рынка</span><i></i></a>
     <div class="nav-caption secondary-caption">ИНСТРУМЕНТЫ</div>
-    <a href="/terminal/" class="nav-link {% if active_page == 'terminal' %}active{% endif %}"><span>≋</span>Стакан</a>
-    <a href="/radar/" class="nav-link {% if active_page == 'radar' %}active{% endif %}"><span>◈</span>Радар</a>
-    <a href="/portfolio/" class="nav-link {% if active_page == 'portfolio' %}active{% endif %}"><span>◫</span>Портфель</a>
+    <a href="/terminal/" class="nav-link {% if active_page == 'terminal' %}active{% endif %}" {% if active_page == 'terminal' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4v16M12 3v18M19 5v15"/><rect x="3" y="8" width="4" height="6" rx="1"/><rect x="10" y="6" width="4" height="9" rx="1"/><rect x="17" y="10" width="4" height="6" rx="1"/></svg></span><span class="nav-text">Терминал</span><i></i></a>
+    <a href="/radar/" class="nav-link {% if active_page == 'radar' %}active{% endif %}" {% if active_page == 'radar' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 6M3 12h9"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="10" r="1"/></svg></span><span class="nav-text">Радар заявок</span><i></i></a>
+    <a href="/portfolio/" class="nav-link {% if active_page == 'portfolio' %}active{% endif %}" {% if active_page == 'portfolio' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12a23 23 0 0 0 18 0M10 13h4"/></svg></span><span class="nav-text">Портфель</span><i></i></a>
   </nav>
-  <div class="sidebar-note"><span class="tiny-dot"></span> Режим наблюдения<p>Сигналы объясняют ситуацию.<br>Сделки принимаешь ты.</p></div>
-  <div class="sidebar-bottom"><span class="avatar">А</span><div>Локальный терминал<small>Исследование рынка</small></div></div>
+  <div class="sidebar-note"><span class="sidebar-note-label">ТВОЙ ВЗГЛЯД НА РЫНОК</span><p>События, графики и данные.<br>Решение всегда за тобой.</p><span class="workspace-tag">БЕЗ АВТОМАТИЧЕСКИХ СДЕЛОК</span></div>
+  <div class="sidebar-bottom"><span class="avatar">А</span><div>Личное пространство<small>Только анализ и наблюдение</small></div></div>
 </aside>

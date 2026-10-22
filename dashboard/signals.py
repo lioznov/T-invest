@@ -1,6 +1,7 @@
 """Deterministic, read-only signal calculations. No broker order methods."""
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from math import isfinite
 from statistics import mean
 
 MSK = timezone(timedelta(hours=3))
@@ -51,8 +52,9 @@ def features(candles):
 
 def valid_book(book):
     bids, asks = book.get("bids", []), book.get("asks", [])
-    return bool(bids and asks and bids[0][0] > 0 and asks[0][0] >= bids[0][0]
-                and all(p > 0 and q > 0 for p, q in bids + asks))
+    return bool(book.get("is_consistent") is not False and bids and asks
+                and bids[0][0] > 0 and asks[0][0] >= bids[0][0]
+                and all(isfinite(p) and isfinite(q) and p > 0 and q > 0 for p, q in bids + asks))
 
 
 def analyse(snapshot, now=None):
@@ -103,6 +105,8 @@ def analyse(snapshot, now=None):
                   and today_minutes and fresh(today_minutes[-1].time,180)
                   and recent and fresh(max(t["time"] for t in recent),90))
     blockers = []
+    if book.get("is_consistent") is False:
+        blockers.append("Т-Банк пометил стакан несогласованным. Оценка входа заблокирована.")
     if not snapshot.get("trading", False): blockers.append("Обычная торговая сессия закрыта или статус торгов не подтверждён.")
     if not fresh_data: blockers.append("Недостаточно свежих рыночных данных. Сигнал на вход заблокирован.")
     missing = sum(r["pass"] is None for r in rules)
@@ -123,7 +127,7 @@ def analyse(snapshot, now=None):
     risk = max(1.5 * atr, entry * .003) if atr else 0
     history = features(candles)
     chart = [{"time":c.time.isoformat(), "open":c.open,"high":c.high,"low":c.low,"close":c.close,"volume":c.volume,"ema":x["ema"],"vwap":x["vwap"]} for c,x in zip(candles,history)][-90:]
-    return {
+    result = {
         "decision":decision,"score":score,"passed":passed,"rules":rules,"blockers":blockers,"exit_reasons":exit_reasons,
         "price":price,"ema":f.get("ema"),"vwap":vwap,"rvol":f.get("rvol"),"buy_share":share,
         "spread_bps":spread,"retention":retention,"buy_volume":buy,"sell_volume":sell,"trade_count":len(recent),
@@ -132,6 +136,9 @@ def analyse(snapshot, now=None):
         "chart":chart,"book":{"bids":book.get("bids",[])[:8],"asks":book.get("asks",[])[:8]},
         "updated_at":now.isoformat(),
     }
+    from .price_patterns import pattern_panel
+    result["patterns"] = pattern_panel(snapshot, result, now)
+    return result
 
 
 STRATEGIES = {

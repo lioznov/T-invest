@@ -109,13 +109,13 @@
 {% endblock %}
 
 {% block content %}
-<div class="panel controls-bar" style="margin-top: 20px;">
+<div class="panel controls-bar radar-toolbar">
     <div>
         <h3 style="margin: 0; color: var(--text-dark);">Мульти-Радар</h3>
         <p style="margin: 5px 0 0 0; font-size: 13px; color: var(--text-gray);">Отслеживание пробоев сразу по списку активов</p>
     </div>
 
-    <div style="display: flex; gap: 15px; align-items: center;">
+    <div class="radar-controls">
 
         <!-- Кнопка выпадающего списка -->
         <div class="watchlist-dropdown-container">
@@ -146,7 +146,7 @@
 </div>
 
 <div id="radarGrid" class="radar-grid">
-    <!-- Карточки мини-стаканов -->
+    <div class="panel radar-empty"><p class="eyebrow">СПИСОК НАБЛЮДЕНИЯ</p><h2>Начни с одной компании</h2><p>Введи тикер в поиск выше и выбери нужную акцию. Здесь появятся её стакан и состояние заявок.</p></div>
 </div>
 
 <script>
@@ -202,6 +202,7 @@
 
                 const grid = document.getElementById('radarGrid');
                 grid.innerHTML = '';
+                if (!savedRadars.length) grid.innerHTML = '<div class="panel radar-empty"><p class="eyebrow">СПИСОК НАБЛЮДЕНИЯ</p><h2>Начни с одной компании</h2><p>Введи тикер в поиск выше и выбери нужную акцию. Здесь появятся её стакан и состояние заявок.</p></div>';
 
                 // Рендер выпадающего списка
                 const watchlistDropdown = document.getElementById('watchlistDropdown');
