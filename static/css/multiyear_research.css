@@ -1,0 +1,39 @@
+.multiyear-panel{margin-top:20px;min-width:0;border:1px solid var(--border,#303238);background:var(--surface,#161719);border-radius:16px;padding:22px}
+.multiyear-panel>summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:12px;list-style:none;color:var(--text,#f4f4f5)}
+.multiyear-panel>summary::-webkit-details-marker{display:none}
+.multiyear-panel>summary::before{content:'+';font-size:24px;color:var(--accent,#ffdf3a);line-height:1}
+.multiyear-panel[open]>summary::before{content:'−'}
+.multiyear-panel>summary:focus-visible{outline:2px solid var(--accent,#ffdf3a);outline-offset:6px;border-radius:4px}
+.multiyear-panel>summary .eyebrow{flex-basis:100%;margin:0}
+.multiyear-title{font-size:clamp(18px,2vw,23px);font-weight:650;line-height:1.3}
+.multiyear-panel>summary .badge{margin-left:auto}
+.multiyear-panel p{line-height:1.6;overflow-wrap:anywhere}
+.multiyear-warning{border-left:3px solid var(--accent,#ffdf3a);padding:10px 14px;background:var(--surface-alt,#202124);line-height:1.6;overflow-wrap:anywhere}
+.multiyear-overview{margin:20px 0}
+.multiyear-overview h3{font-size:18px;margin:0 0 8px}
+.multiyear-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.multiyear-summary-card{min-width:0;padding:16px;border:1px solid var(--border,#303238);border-radius:12px;background:var(--surface-alt,#202124)}
+.multiyear-summary-card h4{font-size:19px;margin:0 0 6px;color:var(--text,#f4f4f5)}
+.multiyear-summary-card dl{margin:12px 0 0;display:grid;gap:10px}
+.multiyear-summary-card dl>div{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap}
+.multiyear-summary-card dt{font-size:12px;color:var(--muted,#aeb2bd)}
+.multiyear-summary-card dd{margin:0;font-size:15px;font-weight:650;color:var(--text,#f4f4f5);overflow-wrap:anywhere}
+.multiyear-coverage-details{margin:20px 0;padding:14px;border:1px solid var(--border,#303238);border-radius:10px}
+.multiyear-coverage-details>summary{cursor:pointer;font-size:14px;line-height:1.6;color:var(--text,#f4f4f5);font-weight:600;overflow-wrap:anywhere}
+.multiyear-table-hint{color:var(--accent,#ffdf3a);font-size:12px;margin:10px 0 0;line-height:1.5}
+.multiyear-period{border-top:1px solid var(--border,#303238);padding-top:16px;margin-top:20px;min-width:0}
+.multiyear-period h3{margin:0 0 8px;font-size:17px}
+.multiyear-scroll{overflow-x:auto;max-width:100%;border:1px solid var(--border,#303238);border-radius:10px;margin:14px 0;overscroll-behavior-x:contain}
+.multiyear-table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:820px;font-size:13px;line-height:1.5;background:var(--surface,#161719)}
+.multiyear-table th,.multiyear-table td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid var(--border,#303238);overflow-wrap:anywhere}
+.workspace .multiyear-panel .multiyear-table th,.workspace .multiyear-panel .multiyear-table td{white-space:normal}
+.multiyear-table thead th{background:var(--surface-alt,#202124);font-weight:650;color:var(--text,#f4f4f5)}
+.multiyear-table th:first-child{width:25%}
+.multiyear-table tr:last-child td,.multiyear-table tr:last-child th{border-bottom:0}
+.multiyear-table tbody th{color:var(--muted,#aeb2bd);font-weight:500}
+.multiyear-table small{display:block;color:var(--muted,#aeb2bd);font-size:11px;margin-top:4px}
+.multiyear-coverage{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px;margin:14px 0}
+.multiyear-stock{min-width:0;border:1px solid var(--border,#303238);border-radius:10px;padding:14px;background:var(--surface-alt,#202124)}
+.multiyear-stock h4{margin:0 0 10px;color:var(--text,#f4f4f5);font-size:15px}
+.multiyear-stock p{font-size:12px;margin:7px 0}
+@media(max-width:600px){.multiyear-panel{padding:16px;border-radius:12px}.multiyear-panel>summary{gap:8px}.multiyear-panel>summary .badge{margin-left:0}.multiyear-summary-grid{grid-template-columns:1fr}.multiyear-scroll::after{content:'Таблицу можно прокрутить вправо →';display:block;padding:8px 12px;color:var(--muted,#aeb2bd);font-size:11px}.multiyear-table th,.multiyear-table td{padding:10px}}

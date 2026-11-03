@@ -11,15 +11,25 @@
   <link rel="stylesheet" href="{% static 'css/news.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/instrument_search.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/telegram_alerts.css' %}?v=2">
+  <link rel="stylesheet" href="{% static 'css/morning_forecast.css' %}?v=1">
+  <link rel="stylesheet" href="{% static 'css/close_timing.css' %}?v=2">
+  <link rel="stylesheet" href="{% static 'css/multiyear_research.css' %}?v=2">
+  <link rel="stylesheet" href="{% static 'css/temporal_validation.css' %}?v=1">
+  <link rel="stylesheet" href="{% static 'css/trading_helper.css' %}?v=1">
   {% include "_theme_head.html" %}
   <script src="{% static 'js/instrument_search.js' %}?v=1" defer></script>
   <script src="{% static 'js/market_structure.js' %}?v=1" defer></script>
   <script src="{% static 'js/technical_chart.js' %}?v=1" defer></script>
   <script src="{% static 'js/neural_trader.js' %}?v=1" defer></script>
   <script src="{% static 'js/chart_ui.js' %}?v=1" defer></script>
-  <script src="{% static 'js/signals.js' %}?v=32" defer></script>
+  <script src="{% static 'js/trading_helper.js' %}?v=1" defer></script>
+  <script src="{% static 'js/signals.js' %}?v=33" defer></script>
   <script src="{% static 'js/news.js' %}?v=2" defer></script>
   <script src="{% static 'js/telegram_alerts.js' %}?v=2" defer></script>
+  <script src="{% static 'js/morning_forecast.js' %}?v=1" defer></script>
+  <script src="{% static 'js/close_timing.js' %}?v=2" defer></script>
+  <script src="{% static 'js/multiyear_research.js' %}?v=2" defer></script>
+  <script src="{% static 'js/temporal_validation.js' %}?v=1" defer></script>
 </head>
 <body data-page="{% if watchlist %}watchlist{% else %}single{% endif %}" data-token="{{ has_token|yesno:'true,false' }}">
   {% if watchlist %}{% include "_app_sidebar.html" with active_page="watchlist" %}{% else %}{% include "_app_sidebar.html" with active_page="single" %}{% endif %}
@@ -46,6 +56,17 @@
         <details class="ai-evidence" open><summary>Как нейросеть торговала на истории?</summary><div id="neural-report" class="research-meta">Проверяем результаты обучения…</div></details>
       </details>
       </div>
+      {% if not watchlist %}
+      <section class="panel research-helper" aria-labelledby="research-helper-heading">
+        <div class="section-heading"><div><p class="eyebrow">ОБЪЯСНЕНИЕ ОЦЕНКИ</p><h2 id="research-helper-heading">Помощник аналитика</h2></div><span class="badge">Данные · условия · риск</span></div>
+        <p class="muted">Объясняет показания обученной нейросети и проверяет, достаточно ли данных для разбора.</p>
+        <div id="research-helper" aria-live="polite"><p class="muted">Ожидаем оценку акции.</p></div>
+      </section>
+      {% endif %}
+      {% include "_morning_forecast.html" %}
+      {% include "_close_timing.html" %}
+      {% include "_multiyear_research.html" %}
+      {% include "_temporal_validation.html" %}
       <details class="panel pattern-research"><summary>Непрерывное наблюдение за рынком</summary><p id="monitor-health" class="research-meta" role="status">Проверяем фоновый сбор…</p><p class="muted small">Сборщик сохраняет стакан, ленту и закрытые свечи 1 и 15 минут даже без браузера. Это запись наблюдений, не доказательство доходности. Для отдельного анализа сигналов без браузера используется monitor_signals. Сон или выключение компьютера остановят сбор.</p></details>
       {% if watchlist %}
       <form id="watch-form" class="panel watch-form"><div><label for="tickers">Какие акции отслеживать?</label><p class="muted">Введи тикеры через пробел или запятую. До 20 акций, обновление каждые 30 секунд. Выбери нужную акцию из подсказок.</p></div><div class="input-row"><div class="instrument-search-wrap"><input id="tickers" placeholder="SBER, GAZP, LKOH, YDEX" autocomplete="off" maxlength="320" role="combobox" aria-autocomplete="list" aria-expanded="false"><div id="tickers-suggestions" class="instrument-suggestions" role="listbox"></div></div><button class="button primary" type="submit">Добавить в обзор <span>＋</span></button></div><p class="form-message" id="watch-message" role="status"></p></form>

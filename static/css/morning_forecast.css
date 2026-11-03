@@ -1,0 +1,32 @@
+.morning-panel{padding:24px;margin:0 0 24px;min-width:0}
+.morning-heading{align-items:flex-start;gap:16px}
+.morning-heading .badge{white-space:normal;max-width:240px;text-align:right}
+.morning-form{display:grid;grid-template-columns:minmax(170px,310px) auto;gap:14px;justify-content:start;align-items:end;margin:22px 0 16px}
+.morning-form label{display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--muted,#b9b9c0);min-width:0}
+.morning-form input{width:100%;min-width:0;background:var(--bg,#0d0d0f);color:var(--text,#fafafa);border:1px solid var(--line,#343438);border-radius:10px;padding:12px 14px;font:inherit;min-height:46px;text-transform:uppercase}
+.morning-form input:focus-visible,.morning-panel summary:focus-visible{outline:2px solid var(--primary,#ffdd2d);outline-offset:3px}
+.morning-status{padding:12px 14px;border:1px solid var(--line,#343438);border-left:3px solid var(--primary,#ffdd2d);border-radius:8px;background:var(--surface-0,#17171a);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.morning-status[data-state="historical"],.morning-status[data-state="demo"]{border-left-color:var(--warning,#ffd34e)}
+.morning-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.morning-metric{padding:16px;border:1px solid var(--line,#343438);border-radius:10px;min-width:0;background:var(--surface-0,#17171a)}
+.morning-metric span,.morning-metric small{display:block;font-size:12px;color:var(--muted,#b9b9c0);line-height:1.65}
+.morning-metric strong{display:block;font-size:clamp(17px,2vw,24px);font-weight:600;margin:8px 0;line-height:1.4;letter-spacing:-.025em;overflow-wrap:anywhere}
+.morning-dates{font-size:13px;margin:12px 0;color:var(--muted,#b9b9c0);line-height:1.8}
+.morning-direction{font-size:14px;font-weight:600;margin:14px 0}
+.morning-rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;border-top:1px solid var(--line,#343438);padding-top:18px;margin-top:22px}
+.morning-rules span{display:block;color:var(--muted,#b9b9c0);font-size:12px;margin-bottom:4px}
+.morning-rules strong{display:block;font-size:13px;font-weight:600}
+.morning-evidence,.morning-help{margin:18px 0;font-size:13px}
+.morning-panel summary{cursor:pointer;color:var(--text,#fafafa);line-height:1.7}
+.morning-help code{display:block;margin:12px 0;padding:12px;border-radius:8px;border:1px solid var(--line,#343438);overflow-wrap:anywhere;white-space:normal}
+.morning-periods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:16px 0}
+.morning-period{border:1px solid var(--line,#343438);border-radius:10px;padding:16px;min-width:0}
+.morning-period h3{margin:0 0 12px;font-size:14px;color:var(--text,#fafafa)}
+.morning-period dl{margin:0}
+.morning-period dl>div{display:flex;justify-content:space-between;align-items:baseline;gap:14px;border-bottom:1px solid var(--line,#343438);padding:7px 0}
+.morning-period dt{color:var(--muted,#b9b9c0);font-size:12px}
+.morning-period dd{margin:0;font-size:13px;text-align:right;overflow-wrap:anywhere}
+.morning-paper{margin:14px 0 0;font-size:12px;line-height:1.8}
+.morning-disclaimer{border-top:1px solid var(--line,#343438);padding-top:16px;margin-bottom:0}
+@media(max-width:1150px){.morning-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.morning-panel{padding:18px}.morning-heading{flex-wrap:wrap}.morning-heading .badge{text-align:left;max-width:100%}.morning-form{grid-template-columns:minmax(0,1fr);justify-content:stretch}.morning-rules,.morning-periods{grid-template-columns:minmax(0,1fr)}.morning-metric{padding:12px}.morning-metric strong{font-size:18px}.morning-rules{gap:14px}}

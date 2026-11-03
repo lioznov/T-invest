@@ -3,6 +3,10 @@ from django.urls import path
 from dashboard import signal_views
 from dashboard import news_views
 from dashboard import telegram_views
+from dashboard import morning_views
+from dashboard import close_timing_views
+from dashboard import multiyear_views
+from dashboard import temporal_validation_views
 
 
 def legacy(name):
@@ -31,6 +35,10 @@ urlpatterns = [
     path('api/signals/', signal_views.signal, name='signals'),
     path('api/telegram-alerts/', telegram_views.alerts, name='telegram_alerts'),
     path('api/ai-model/', signal_views.ai_model, name='ai_model'),
+    path('api/morning-forecast/', morning_views.forecast, name='morning_forecast'),
+    path('api/close-timing/', close_timing_views.report, name='close_timing'),
+    path('api/multiyear-research/', multiyear_views.report, name='multiyear_research'),
+    path('api/temporal-validation/', temporal_validation_views.report, name='temporal_validation'),
     path('api/monitor-health/', signal_views.monitor_health, name='monitor_health'),
     path('api/research/', signal_views.research, name='research'),
     path('api/pattern-research/', signal_views.pattern_research, name='pattern_research'),

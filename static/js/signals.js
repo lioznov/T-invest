@@ -23,7 +23,7 @@
   let riskContext='', riskTouched=false, currentPlan=null;
   let researchHistory=read('vorby.researchHistory','archive')==='current'?'current':'archive';
   const results=new Map();
-  let currentAi=null,currentNeural=null;
+  let currentAi=null,currentNeural=null,currentHelper=null;
   let chartSnapshot=null,structureWasFresh=false,currentTechnical=null;
 
   async function request(url, timeoutMs=15000) {
@@ -126,6 +126,8 @@
     return `<div class="watch-ai"><strong>ИИ: ${state?.status==='ok'?num(state.score,0)+' / 100 · '+(state.decision==='WATCH'?'наблюдать':'ждать'):'ожидание'}</strong><span>${esc(state?.message || (mode==='demo'?'Реальная модель не оценивает учебные цены.':'Ждём данные для модели.'))}</span></div>${window.VorbyNeural.watchMarkup(a?.neural,mode)}${note}`;
   }
   function clearSingle(message='Получаем данные…') {
+    currentHelper=null;
+    if($('research-helper'))$('research-helper').innerHTML=window.VorbyResearchHelper.markup(null,mode);
     displayedUntil=0;
     $('load-status').textContent=message;
     $('instrument-name').textContent=ticker;
@@ -283,6 +285,8 @@
   function renderSingle(payload) {
     if(payload.status!=='ok') {clearSingle(payload.message || 'Получаем историю и рыночные данные…'); return;}
     const a=payload.analysis,inst=payload.instrument;
+    currentHelper=payload.research_helper;
+    if($('research-helper'))$('research-helper').innerHTML=window.VorbyResearchHelper.markup(currentHelper,mode);
     renderAi(a.ai);
     currentNeural=a.neural;$('neural-result').innerHTML=window.VorbyNeural.readingMarkup(a.neural,mode);
     displayedUntil=['LONG','EXIT'].includes(a.decision)?Math.min(Date.parse(a.data_time)+45000,Date.parse(a.updated_at)+35000):0;
@@ -536,7 +540,7 @@
   function restart() {
     clearTimeout(timer);generation++;researchGeneration++;paperRevision++;patternResearchRevision++;
     banner();results.clear();
-    currentAi=null;currentNeural=null;
+    currentAi=null;currentNeural=null;currentHelper=null;
     $('neural-report').textContent='Проверяем результаты обучения…';
     $('neural-result').innerHTML=watch?'<p class="muted">Оценки нейросети появятся в карточках акций.</p>':window.VorbyNeural.readingMarkup(null,mode);
     loadAiModel(generation);
@@ -674,6 +678,10 @@
   // Clear actionable prices even if a slow request or a disconnected server delays polling.
   setInterval(()=>{
     if(mode!=='live')return;
+    if(!watch&&$('research-helper')&&currentHelper?.data_review?.state==='fresh_live'&&Date.now()>Date.parse(currentHelper.data_review.valid_until)){
+      currentHelper=window.VorbyResearchHelper.state(currentHelper,mode);
+      $('research-helper').innerHTML=window.VorbyResearchHelper.markup(currentHelper,mode);
+    }
     if(!watch && currentAi?.status==='ok' && aiState(currentAi)?.status!=='ok')renderAi(aiState(currentAi));
     if(!watch && currentNeural?.status==='ok' && window.VorbyNeural.state(currentNeural,mode).status!=='ok') {
       currentNeural=window.VorbyNeural.state(currentNeural,mode);$('neural-result').innerHTML=window.VorbyNeural.readingMarkup(currentNeural,mode);

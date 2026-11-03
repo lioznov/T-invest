@@ -1,6 +1,9 @@
 import math
 import os
 import re
+import time
+from functools import lru_cache
+from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
@@ -8,6 +11,19 @@ from .signal_service import get_signal, get_backtest
 from .forward_review import load_review
 from .paper_journal import load_paper_journal
 from .risk import position_size
+
+
+@lru_cache(maxsize=96)
+def _helper_evidence(ticker, bucket):
+    """Public local reports only; no extra broker or paid AI requests."""
+    from .neural_service import model_status
+    import sqlite3
+    def optional(reader):
+        try:
+            return reader()
+        except (OSError,ValueError,sqlite3.Error):
+            return {'status':'unavailable'}
+    return optional(model_status),optional(lambda:load_paper_journal(ticker)),optional(lambda:load_review(ticker))
 
 
 def page(request, watchlist=False):
@@ -42,7 +58,14 @@ def signal(request):
     from .ai_service import expire_payload
     from .structure_research import expire_structure_payload
     from .technical_context import expire_payload as expire_technical
-    response=JsonResponse(expire_technical(expire_structure_payload(expire_payload(get_signal(mode,ticker)))))
+    payload=expire_technical(expire_structure_payload(expire_payload(get_signal(mode,ticker))))
+    from .trading_research_helper import summarize_research
+    model=paper_report=forward_report=None
+    if mode=='live' and payload.get('status')=='ok':
+        model,paper_report,forward_report=_helper_evidence(ticker,int(time.monotonic()//30))
+    payload={**payload,'research_helper':summarize_research(payload,now=timezone.now(),
+        model_report=model,paper_report=paper_report,forward_report=forward_report)}
+    response=JsonResponse(payload)
     response["Cache-Control"]="no-store"
     return response
 
