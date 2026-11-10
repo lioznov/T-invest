@@ -55,8 +55,8 @@
     document.querySelectorAll('[data-mode]').forEach(button=>button.classList.toggle('selected',button.dataset.mode===mode));
     $('mode-banner').classList.toggle('demo',mode==='demo');
     $('mode-banner').textContent=mode==='demo'
-      ? 'УЧЕБНЫЙ РЕЖИМ · Цены и результаты вымышлены. Это демонстрация интерфейса и правил, не торговые сигналы.'
-      : 'Т-Банк · Реальные данные, экспериментальные сигналы. Кандидат покупки — совпадение шести условий; «Проверь продажу» — повод оценить выход из уже купленной акции. Доходность этих сигналов не доказана.';
+      ? 'Учебный режим · Цены вымышлены. Это пример работы сайта, не торговый сигнал.'
+      : 'Т-Банк · Реальные котировки. Сигналы экспериментальные, их прибыльность пока не подтверждена.';
   }
   function aiState(value) {
     if(value?.status==='ok' && (!value.valid_until || !Number.isFinite(Date.parse(value.valid_until)) || Date.now()>Date.parse(value.valid_until)))return {...value,status:'waiting',decision:'WAIT',score:null,plan:null,drivers:[],message:'Оценка ИИ устарела. Ждём новую свечу и котировки.'};
@@ -125,11 +125,14 @@
     const note=structure?`<div class="watch-structure">Разметка: ${esc(structure.status==='ok'?structure.message:'Исторические уровни, данные устарели')}. Без команды покупки.</div>`:'';
     return `<div class="watch-ai"><strong>ИИ: ${state?.status==='ok'?num(state.score,0)+' / 100 · '+(state.decision==='WATCH'?'наблюдать':'ждать'):'ожидание'}</strong><span>${esc(state?.message || (mode==='demo'?'Реальная модель не оценивает учебные цены.':'Ждём данные для модели.'))}</span></div>${window.VorbyNeural.watchMarkup(a?.neural,mode)}${note}`;
   }
-  function clearSingle(message='Получаем данные…') {
+  function clearSingle(message='Получаем данные…',state='loading') {
     currentHelper=null;
     if($('research-helper'))$('research-helper').innerHTML=window.VorbyResearchHelper.markup(null,mode);
     displayedUntil=0;
-    $('load-status').textContent=message;
+    $('load-status').textContent=state==='unavailable'?'Котировки недоступны. Проверь подключение или попробуй обновить позже.':message;
+    $('signal-panel').dataset.state=state;
+    $('signal-panel').setAttribute('aria-busy',String(state==='loading'));
+    if($('connection-detail'))$('connection-detail').textContent=message;
     $('instrument-name').textContent=ticker;
     $('ticker-label').textContent=`${ticker} · TQBR`;
     $('ticker-avatar').textContent=ticker[0];
@@ -137,20 +140,22 @@
     chartSnapshot=null;structureWasFresh=false;renderStructure(null);
     currentTechnical=null;$('technical-result').innerHTML=window.VorbyTechnical.panelMarkup(null);
     $('price-change').textContent='Нет актуальной оценки';
-    $('decision').textContent='Ожидание'; $('decision').classList.remove('positive','negative');
+    $('decision').textContent=state==='loading'?'Загружаем':state==='stale'?'Оценка устарела':'Нет данных'; $('decision').classList.remove('positive','negative');
     $('score').innerHTML='—<small>/100</small>'; $('score-fill').style.width='0';
     $('passed').textContent='Условия не оценены';
     $('decision-text').textContent='До получения свежих данных сигнал заблокирован.';
+    if($('next-step'))$('next-step').textContent='Дождись свежих котировок. Пока нет данных, оценивать покупку нельзя.';
     $('blockers').textContent=''; $('rules').innerHTML=''; $('price-chart').innerHTML='';
     $('data-quality').textContent='';
     $('range-levels').textContent='Уровни появятся после загрузки закрытых свечей.';
+    $('chart-empty').textContent=state==='loading'?'Загружаем график…':state==='stale'?'Ждём свежие котировки':'Нет данных для графика';
     $('chart-empty').classList.remove('hidden'); $('chart-period').textContent='—';
     $('orderbook').innerHTML='<p class="muted">Ожидаем заявки биржи</p>';
     $('book-samples').textContent='0 снимков';
     $('trade-plan').innerHTML='<p class="muted">План покупки появится, когда все шесть условий будут выполнены на свежих данных.</p>';
     currentPlan=null;$('use-plan').disabled=true;
     $('risk-plan-note').textContent='Свежего сценария покупки сейчас нет. Введённые цены — твой самостоятельный расчёт.';
-    clearPatterns(message);
+    clearPatterns(state==='unavailable'?'Сейчас нет котировок для разбора.':message);
     renderAi(null);
     currentNeural=null;$('neural-result').innerHTML=window.VorbyNeural.readingMarkup(null,mode);
   }
@@ -283,23 +288,27 @@
     $('chart-period').textContent=`${day(data[0].time)} — ${day(data[data.length-1].time)} · МСК`;
   }
   function renderSingle(payload) {
-    if(payload.status!=='ok') {clearSingle(payload.message || 'Получаем историю и рыночные данные…'); return;}
+    if(payload.status!=='ok') {clearSingle(payload.message || 'Получаем историю и рыночные данные…',payload.status==='error'?'unavailable':'loading'); return;}
     const a=payload.analysis,inst=payload.instrument;
+    $('signal-panel').dataset.state=mode==='demo'?'demo':'ready';
+    $('signal-panel').setAttribute('aria-busy','false');
+    if($('connection-detail'))$('connection-detail').textContent=mode==='demo'?'Учебный режим работает без подключения к брокеру.':'Последний запрос котировок выполнен. Статус качества данных показан рядом с графиком.';
     currentHelper=payload.research_helper;
     if($('research-helper'))$('research-helper').innerHTML=window.VorbyResearchHelper.markup(currentHelper,mode);
     renderAi(a.ai);
     currentNeural=a.neural;$('neural-result').innerHTML=window.VorbyNeural.readingMarkup(a.neural,mode);
     displayedUntil=['LONG','EXIT'].includes(a.decision)?Math.min(Date.parse(a.data_time)+45000,Date.parse(a.updated_at)+35000):0;
-    $('load-status').textContent=payload.refreshing?'Обновляем котировки; предыдущая оценка была WAIT.':mode==='demo'?'Демонстрация на вымышленных данных.':a.blockers.length?'Данные получены; проверь ограничения ниже.':'';
+    $('load-status').textContent=payload.refreshing?'Обновляем котировки; предыдущая оценка была WAIT.':mode==='demo'?'':a.blockers.length?'Данные получены; проверь ограничения ниже.':'';
     $('instrument-name').textContent=inst.name; $('ticker-label').textContent=`${inst.ticker} · ${inst.lot} шт. в лоте`;
     $('price').textContent=money(a.price);
     $('price-change').textContent=mode==='demo'?'Учебная котировка':'Середина лучшей покупки и продажи';
-    $('decision').textContent=a.decision==='LONG'?'Кандидат покупки':a.decision==='EXIT'?'Проверь продажу':'Ждать';
+    $('decision').textContent=mode==='demo'?(a.decision==='LONG'?'Пример покупки':a.decision==='EXIT'?'Пример выхода':'Пример наблюдения'):(a.decision==='LONG'?'Кандидат покупки':a.decision==='EXIT'?'Проверь продажу':'Ждать');
     $('decision').classList.toggle('positive',a.decision==='LONG');
     $('decision').classList.toggle('negative',a.decision==='EXIT');
     $('score').innerHTML=`${a.score}<small>/100</small>`;
     $('score-fill').style.width=a.score+'%'; $('passed').textContent=`${a.passed} из 6 условий покупки`;
     $('decision-text').textContent=a.decision==='LONG'?'Все условия покупки совпали. Изучи сценарий и расходы перед собственным решением.':a.decision==='EXIT'?'Если акция уже есть: три признака ухудшения указывают, что стоит проверить выход из позиции.':'Для покупки должны совпасть все шесть условий на свежих данных.';
+    if($('next-step'))$('next-step').textContent=mode==='demo'?'Это учебный пример на вымышленных ценах. Для наблюдения за реальной акцией выбери «Рынок».':a.decision==='LONG'?'Изучи план ниже и рассчитай допустимую сумму покупки. Баллы не означают вероятность прибыли.':a.decision==='EXIT'?'Если акция уже есть в портфеле, проверь причины ухудшения. Это не предложение открыть шорт.':'Пока наблюдай. Система обновит оценку, когда появятся новые котировки.';
     $('blockers').innerHTML=[...a.blockers,...(a.decision==='EXIT'?a.exit_reasons:[])].map(x=>`<p>${esc(x)}</p>`).join('');
     $('data-time').textContent=time(a.data_time);
     const quality=a.data_quality;
@@ -346,9 +355,7 @@
     $('risk-result').innerHTML='<p class="research-meta">Подставлены округлённые цены сценария. Проверь цены и биржевой шаг инструмента перед расчётом. Калькулятор использует значения, видимые в полях.</p>';
   }
   function renderRisk(data) {
-    if(data.status!=='ok'){$('risk-result').textContent=data.message || 'Проверь введённые значения.';return;}
-    const assumptions=Array.isArray(data.assumptions)?data.assumptions.join(' '):data.assumptions;
-    $('risk-result').innerHTML=`<div class="research-verdict ${data.lots?'':'evidence-caution'}">${esc(data.message || (data.lots?'Количество рассчитано по двум ограничениям: риск и доля капитала.':'Даже один лот не помещается в заданные ограничения.'))}</div><div class="forward-stats risk-stats"><div><span>Количество · ${esc(ticker)}</span><strong>${num(data.lots,0)} лот. / ${num(data.shares,0)} шт.</strong></div><div><span>Стоимость позиции</span><strong>${money(data.position_cost)}</strong></div><div><span>Расчётный убыток при стопе</span><strong class="negative">${money(data.planned_loss)}</strong></div><div><span>Лимит убытка</span><strong>${money(data.risk_budget)}</strong></div><div><span>Прибыль при достижении цели</span><strong>${money(data.expected_target_profit)}</strong></div><div><span>Прибыль / риск после расходов</span><strong>${num(data.reward_risk)}×</strong></div></div><p class="research-meta">Расчётный риск: ${num(data.effective_risk_pct)}% капитала. ${esc(assumptions || '')} ${mode==='demo'?'Учебный режим: цены вымышлены.':''}</p>`;
+    $('risk-result').innerHTML=window.VorbyRiskUI.markup(data,ticker,mode);
   }
   function renderWatch() {
     $('total-count').textContent=symbols.length;
@@ -358,11 +365,12 @@
     $('long-count').textContent=longs; $('exit-count').textContent=exits; $('wait-count').textContent=waits;
     $('pending-count').textContent=symbols.length-longs-exits-waits;
     if(!symbols.length) {$('watch-grid').innerHTML='<div class="empty-state">Добавь первую акцию, чтобы начать наблюдение.<br><small>Например: SBER, GAZP, LKOH</small></div>';return;}
+    const expanded=new Set([...$('watch-grid').querySelectorAll('details[data-watch-extra][open]')].map(node=>node.dataset.watchExtra));
     $('watch-grid').innerHTML=symbols.map(s=>{
       const r=results.get(s),ok=r?.status==='ok',a=ok?r.analysis:null;
-      const label=a?.decision==='LONG'?'Кандидат покупки':a?.decision==='EXIT'?'Проверь продажу':ok?'Ждать':r?.status==='error'?'Данные недоступны':'Получаем данные';
+      const label=mode==='demo'&&ok?(a.decision==='LONG'?'Пример покупки':a.decision==='EXIT'?'Пример выхода':'Пример наблюдения'):a?.decision==='LONG'?'Кандидат покупки':a?.decision==='EXIT'?'Проверь продажу':ok?'Ждать':r?.status==='error'?'Данные недоступны':'Получаем данные';
       const note=ok?(a.blockers[0] || (a.decision==='LONG'?'Все шесть условий покупки совпали. Открой подробный разбор.':a.decision==='EXIT'?'Если акция есть: '+a.exit_reasons.slice(0,2).join('; '):'Ожидаем: '+a.rules.filter(x=>x.pass!==true).map(x=>x.name.toLowerCase()).slice(0,2).join(', '))):(r?.message||'Загружаем данные Т-Банка…');
-      return `<article class="panel watch-card"><button class="remove" data-remove="${esc(s)}" aria-label="Удалить ${esc(s)} из обзора">×</button><a href="/?ticker=${encodeURIComponent(s)}&mode=${mode}"><h3>${esc(s)}</h3><div class="company">${esc(ok?r.instrument.name:'Загрузка инструмента')}</div><div class="watch-price">${ok?money(a.price):'—'}</div><div class="watch-decision"><span class="${a?.decision==='LONG'?'positive':a?.decision==='EXIT'?'negative':'muted'}">${label}</span><span>${ok?a.score+' / 100 покупки':'—'}</span></div><div class="watch-checks">${Array.from({length:6},(_,i)=>`<span class="${a?.rules[i].pass===true?'yes':''}" title="${esc(a?.rules[i].name||'Ожидание')}"></span>`).join('')}</div><div class="watch-note">${esc(note)}</div>${aiWatchMarkup(a)}${patternWatchMarkup(a)}<div class="card-bottom"><span>${ok?time(a.data_time):'Ожидание ответа'}</span><span>Разобрать →</span></div></a></article>`;
+      return `<article class="panel watch-card"><button class="remove" data-remove="${esc(s)}" aria-label="Удалить ${esc(s)} из обзора">×</button><a href="/?ticker=${encodeURIComponent(s)}&mode=${mode}"><h3>${esc(s)}</h3><div class="company">${esc(ok?r.instrument.name:'Загрузка инструмента')}</div><div class="watch-price">${ok?money(a.price):'—'}</div><div class="watch-decision"><span class="${a?.decision==='LONG'?'positive':a?.decision==='EXIT'?'negative':'muted'}">${label}</span><span>${ok?a.score+' / 100 покупки':'—'}</span></div><div class="watch-checks">${Array.from({length:6},(_,i)=>`<span class="${a?.rules[i].pass===true?'yes':''}" title="${esc(a?.rules[i].name||'Ожидание')}"></span>`).join('')}</div><div class="watch-note">${esc(note)}</div></a><details class="watch-extra" data-watch-extra="${esc(s)}"${expanded.has(s)?' open':''}><summary>Модели и паттерны</summary>${aiWatchMarkup(a)}${patternWatchMarkup(a)}</details><a class="card-bottom" href="/?ticker=${encodeURIComponent(s)}&mode=${mode}"><span>${ok?time(a.data_time):'Ожидание ответа'}</span><span>Разобрать →</span></a></article>`;
     }).join('');
   }
   function renderForward(data) {
@@ -608,7 +616,7 @@
     $('risk-form').addEventListener('input',()=>{
       riskRevision++;riskTouched=true;
       $('risk-form').querySelector('button[type="submit"]').disabled=false;
-      $('risk-result').innerHTML='<p class="research-meta">Параметры изменены. Нажми «Рассчитать размер позиции», чтобы обновить результат.</p>';
+      $('risk-result').innerHTML='<p class="research-meta">Параметры изменены. Нажми «Рассчитать количество акций», чтобы обновить результат.</p>';
     });
     $('risk-form').addEventListener('submit',async event=>{
       event.preventDefault();const revision=++riskRevision,context=riskContext,button=event.submitter || $('risk-form').querySelector('button[type="submit"]');
@@ -693,7 +701,7 @@
         if(!['ok','demo'].includes(technical.book?.status))$('price-chart').querySelectorAll('[data-technical="book-zone"]').forEach(n=>n.remove());
       }
       if(structureWasFresh && chartSnapshot?.structure && structureState(chartSnapshot.structure)?.status==='stale')renderStructure(chartSnapshot.structure);
-      if(displayedUntil && Date.now()>displayedUntil)clearSingle('Котировки устарели. Ожидаем свежие данные.');
+      if(displayedUntil && Date.now()>displayedUntil)clearSingle('Котировки устарели. Ожидаем свежие данные.','stale');
       if(patternUntil && Date.now()>patternUntil)clearPatterns('Оценка паттернов устарела. Отметки скрыты до свежих данных.');
     } else {
       let changed=false;

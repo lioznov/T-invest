@@ -102,5 +102,5 @@ class AIV2DeliveryTests(SimpleTestCase):
         for url in ('/','/watchlist/'):
             response=Client().get(url)
             self.assertContains(response,'id="ai-comparison"')
-            self.assertContains(response,'signals.js?v=32')
+            self.assertContains(response,'signals.js?v=35')
             self.assertContains(response,'chart_ui.js?v=1')
