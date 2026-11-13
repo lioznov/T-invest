@@ -16,8 +16,9 @@
   }
   function render(value){
     toggle.checked=value.enabled;toggle.disabled=!value.configured && !value.enabled;
+    const delivery=value.result==='rejected'?'Сообщение не отправлено.':value.result==='unknown'?'Доставка ВК не подтверждена.':'Уведомления ВК выбраны.';
     status.textContent=!value.configured?'ВК не настроен. Добавь ключ и свой ID в .env и перезапусти сайт. Включённую галочку можно отключить.':
-      `${value.enabled?'ВК включён.':'ВК выключен.'} ${value.message} Только твой личный диалог.`;
+      `${value.enabled?delivery:'Уведомления ВК выключены.'} ${value.message} Только твой личный диалог.`;
   }
   async function load(){
     if(busy)return;

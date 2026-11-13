@@ -131,12 +131,20 @@ class VKTransportTests(TestCase):
         self.assertEqual(opener.open.call_args.kwargs['timeout'],8)
 
     def test_known_refusals_and_rate_limits(self):
-        for code in (5,6,9,14,15,901,902):
+        for code in (5,6,7,9,14,15,27,28,29,100,113,200,900,901,902):
             value,_=self.result({'error':{'error_code':code,'error_msg':'synthetic-vk-key'}})
             self.assertEqual(value['status'],'rejected');self.assertNotIn('synthetic-vk-key',json.dumps(value))
+            self.assertIn(f'({code})',value['message'])
+
+    def test_missing_permission_is_distinguished_from_invalid_token_and_privacy(self):
+        for code,reason in ((901,'Нет разрешения'),(902,'приватности'),(27,'авторизацию'),(113,'Получатель не найден')):
+            value,_=self.result({'error':{'error_code':code,'error_msg':'synthetic-vk-key','request_params':[{'key':'access_token','value':'synthetic-vk-key'}]}})
+            self.assertIn(reason,value['message'])
+            self.assertNotIn('synthetic-vk-key',json.dumps(value))
+        self.assertIn('Подписки на группу недостаточно',self.result({'error':{'error_code':901}})[0]['message'])
 
     def test_malformed_and_server_errors_are_ambiguous(self):
-        for value in ({'response':False},{'response':0},{'error':{'error_code':10}},{}):
+        for value in ({'response':False},{'response':0},{'error':{'error_code':10}},{'error':{'error_code':'synthetic-vk-key'}},{'error':{'error_code':[]}},{}):
             self.assertEqual(self.result(value)[0]['status'],'unknown')
 
     def test_timeout_does_not_leak_diagnostics(self):

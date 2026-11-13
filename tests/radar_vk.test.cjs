@@ -53,6 +53,16 @@ test('ambiguous delivery is shown as text and does not cause automatic POST retr
   const h=harness('multi',{enabled:true,message:'<b>Приём не подтверждён</b>',result:'unknown'});await h.tick();
   assert.equal(h.calls.length,1);assert.match(h.status.textContent,/Приём не подтверждён/);
   assert.equal(h.status.innerHTML,undefined);
+  assert.doesNotMatch(h.status.textContent,/ВК включён/);
+});
+
+test('enabled checkbox with VK rejection displays failure instead of claiming working delivery',async()=>{
+  const h=harness('multi',{enabled:true,result:'rejected',message:'ВК (901): Нет разрешения писать получателю.'});await h.tick();
+  assert.equal(h.toggle.checked,true);
+  assert.match(h.status.textContent,/Сообщение не отправлено/);
+  assert.match(h.status.textContent,/901/);
+  assert.doesNotMatch(h.status.textContent,/ВК включён/);
+  assert.equal(h.calls.length,1);
 });
 
 test('a failed connection disables the control and discloses unconfirmed state',async()=>{
