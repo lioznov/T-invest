@@ -88,8 +88,12 @@ def message(ticker, a):
 
 
 class Store:
+    transport = transport
+    filename = 'telegram.sqlite3'
+    setup_message = 'В .env нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID того же бота, что у радара.'
+
     def __init__(self, path=None):
-        self.path = Path(path) if path else Path(settings.BASE_DIR)/'data'/'telegram.sqlite3'
+        self.path = Path(path) if path else Path(settings.BASE_DIR)/'data'/self.filename
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.db() as db:
             db.executescript('''
@@ -125,8 +129,8 @@ class Store:
         if type(enabled) is not bool:
             raise ValueError('Укажи, включены ли уведомления.')
         tickers = symbols(tickers)
-        if enabled and not transport.configured():
-            raise ValueError('В .env нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID того же бота, что у радара.')
+        if enabled and not self.transport.configured():
+            raise ValueError(self.setup_message)
         if enabled and not os.getenv('INVEST_TOKEN'):
             raise ValueError('Для живых сигналов нужен INVEST_TOKEN.')
         with self.db() as db:
@@ -156,7 +160,7 @@ class Store:
         with self.db() as db:
             worker = db.execute('SELECT * FROM worker WHERE id=1').fetchone()
             rows = db.execute('SELECT ticker,checked,last_sent,result,decision,detail,delivery_detail FROM episodes').fetchall()
-        result.update(configured=transport.configured(),
+        result.update(configured=self.transport.configured(),
                       worker_running=bool(result['enabled'] and worker['until'] > now
                                           and 0 <= now-worker['heartbeat'] <= 20),
                       heartbeat_at=worker['heartbeat'] or None, message=worker['message'],
@@ -169,7 +173,7 @@ class Store:
 
     def observe(self, ticker, payload, *, now=None, sender=None):
         now = time.time() if now is None else now
-        sender = sender or transport.send
+        sender = sender or self.transport.send
         cfg = self.config()
         if not cfg['enabled'] or ticker not in cfg['tickers']:
             return 'disabled'
@@ -202,7 +206,7 @@ class Store:
             db.execute('UPDATE episodes SET active=1,last_sent=?,result=?,delivery_detail=?,event=? WHERE ticker=?',
                        (now, 'unknown', 'Отправка начата, подтверждение ещё не получено.', event, ticker))
         # The payload can expire while waiting for a SQLite lock.
-        if checked_analysis(payload, ticker, time.time() if sender is transport.send else now) is None:
+        if checked_analysis(payload, ticker, time.time() if sender is self.transport.send else now) is None:
             result = {'status': 'rejected', 'retry_after': 60, 'message': 'Сигнал устарел до отправки.'}
         else:
             try:
@@ -231,7 +235,7 @@ def worker_loop(stop=None, store=None):
         while not stop.is_set():
             try:
                 cfg = store.config()
-                if cfg['enabled'] and transport.configured() and store.lease(owner, time.time()):
+                if cfg['enabled'] and store.transport.configured() and store.lease(owner, time.time()):
                     from .signal_service import get_signal
                     active = set(collector_status()['active_tickers'])
                     selected = [ticker for ticker in cfg['tickers'] if ticker in active]

@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block nav_terminal %}active{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/radar_vk.css' %}?v=1">
+<script src="{% static 'js/radar_vk.js' %}?v=1" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 <style>
     /* Стили для переключателя бота */
@@ -32,6 +35,8 @@
                 <span class="slider"></span>
             </label>
         </div>
+
+        {% include "_radar_vk.html" with vk_scope="single" %}
 
         <!-- УМНЫЙ ПОИСК -->
         <div class="search-container">

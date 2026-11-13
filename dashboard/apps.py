@@ -11,3 +11,5 @@ class DashboardConfig(AppConfig):
         if 'runserver' in sys.argv and ('--noreload' in sys.argv or os.getenv('RUN_MAIN') == 'true'):
             from .telegram_alerts import ensure_worker
             ensure_worker()
+            from .vk_alerts import ensure_worker as ensure_vk_worker
+            ensure_vk_worker()

@@ -3,6 +3,8 @@ from django.urls import path
 from dashboard import signal_views
 from dashboard import news_views
 from dashboard import telegram_views
+from dashboard import vk_views
+from dashboard import radar_vk_views
 from dashboard import morning_views
 from dashboard import close_timing_views
 from dashboard import multiyear_views
@@ -34,6 +36,8 @@ urlpatterns = [
     path('api/news/reaction/',news_views.reaction,name='news_reaction'),
     path('api/signals/', signal_views.signal, name='signals'),
     path('api/telegram-alerts/', telegram_views.alerts, name='telegram_alerts'),
+    path('api/vk-alerts/', vk_views.alerts, name='vk_alerts'),
+    path('api/radar-vk/', radar_vk_views.alerts, name='radar_vk'),
     path('api/ai-model/', signal_views.ai_model, name='ai_model'),
     path('api/morning-forecast/', morning_views.forecast, name='morning_forecast'),
     path('api/close-timing/', close_timing_views.report, name='close_timing'),

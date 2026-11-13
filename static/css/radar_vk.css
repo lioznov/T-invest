@@ -1,0 +1,5 @@
+.radar-vk{display:grid;gap:5px;min-width:0;max-width:300px}
+.radar-vk-toggle{display:flex;gap:8px;align-items:center;min-height:36px;cursor:pointer;font-size:14px;color:var(--text-dark)}
+.radar-vk-toggle input{width:18px;height:18px;accent-color:var(--primary);flex-shrink:0}
+.radar-vk small{font-size:12px;line-height:1.4;color:var(--text-gray);overflow-wrap:anywhere}
+@media(max-width:600px){.radar-vk{max-width:100%;width:100%}}

@@ -9,7 +9,7 @@
 .telegram-symbols textarea{width:100%;min-width:0;box-sizing:border-box;resize:vertical;min-height:90px;font:inherit;color:var(--text,#eee);background:#111113;border:1px solid #444448;border-radius:12px;padding:12px;line-height:1.5}
 .telegram-symbols textarea:focus-visible{outline:2px solid var(--primary,#ffdd2d);outline-offset:2px}
 .telegram-items{max-height:520px;overflow-y:auto}
-.telegram-panel #telegram-more{margin-top:12px}
+.telegram-panel #telegram-more,.telegram-panel #vk-more{margin-top:12px}
 .telegram-toggle{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;cursor:pointer}
 .telegram-toggle input{width:18px;height:18px;flex-shrink:0;accent-color:var(--primary,#ffdd2d)}
 .telegram-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:10px}

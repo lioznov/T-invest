@@ -28,6 +28,7 @@
   <script src="{% static 'js/signals.js' %}?v=35" defer></script>
   <script src="{% static 'js/news.js' %}?v=2" defer></script>
   <script src="{% static 'js/telegram_alerts.js' %}?v=2" defer></script>
+  <script src="{% static 'js/vk_alerts.js' %}?v=1" defer></script>
   <script src="{% static 'js/morning_forecast.js' %}?v=1" defer></script>
   <script src="{% static 'js/close_timing.js' %}?v=2" defer></script>
   <script src="{% static 'js/multiyear_research.js' %}?v=2" defer></script>
@@ -133,6 +134,7 @@
       </section>
       <section id="focus-settings" class="focus-pane" role="tabpanel" aria-labelledby="tab-settings" data-focus-pane="settings" hidden>
         <div class="focus-section-heading"><h2>Риск и уведомления</h2><p>Настрой наблюдение и рассчитай допустимую сумму покупки.</p></div>
+        {% include "_vk_alerts.html" %}
         {% include "_telegram_alerts.html" %}
         {% if not watchlist %}      <section class="panel research-panel risk-panel" aria-labelledby="risk-heading">
         <div class="section-heading"><div><p class="eyebrow">ПЛАНИРОВАНИЕ ПОКУПКИ</p><h2 id="risk-heading">Сколько акций я могу купить?</h2></div><span class="badge" id="risk-symbol">SBER</span></div>

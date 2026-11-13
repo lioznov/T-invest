@@ -13,6 +13,7 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
 from dotenv import load_dotenv
+from . import radar_vk
 
 from t_tech.invest import (
     Client,
@@ -29,7 +30,7 @@ from t_tech.invest.utils import quotation_to_decimal
 
 os.environ["GRPC_DEFAULT_SSL_ROOTS_FILE_PATH"] = certifi.where()
 env_path = os.path.join(settings.BASE_DIR, '.env')
-load_dotenv(env_path)
+load_dotenv(os.getenv('INVEST_ENV_FILE', env_path))
 
 TG_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -278,6 +279,10 @@ async def stream_data(figi):
                             anomaly_msg = alerts_to_send[0].replace("\n", " ")
                             is_anomaly = True
 
+                            ticker_name = TICKER_CACHE.get(figi, figi)
+                            vk_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
+                            radar_vk.submit('single', figi, vk_msg)
+
                             if current_time - last_tg_alert > 10 and BOT_ALERTS_ENABLED:
                                 ticker_name = TICKER_CACHE.get(figi, figi)
                                 tg_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
@@ -453,6 +458,10 @@ async def multi_stream_data():
                         if alerts_to_send:
                             anomaly_msg = alerts_to_send[0].replace("\n", " ")
                             is_anomaly = True
+
+                            ticker_name = TICKER_CACHE.get(figi, figi)
+                            vk_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
+                            radar_vk.submit('multi', figi, vk_msg)
 
                             if current_time - last_tg_alert[figi] > 10 and MULTI_BOT_ALERTS_ENABLED:
                                 ticker_name = TICKER_CACHE.get(figi, figi)
