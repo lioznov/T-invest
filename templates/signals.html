@@ -44,7 +44,7 @@
       <p id="data-quality" class="research-meta" role="status"></p>
 {% endif %}
       <div id="mode-banner" class="notice" role="status"></div>
-      <p class="notification-entry"><a class="button ghost" href="#notification-panel">Настроить уведомления анализа ↗</a></p>
+      {% if not watchlist %}<p class="notification-entry"><a class="button ghost" href="#notification-panel">Настроить уведомления анализа ↗</a></p>{% endif %}
       <div class="studio-workbench"><nav class="focus-tabs" aria-label="Разделы анализа" role="tablist"><p class="studio-rail-label">РАБОЧАЯ ОБЛАСТЬ</p>
         <button type="button" id="tab-now" role="tab" aria-selected="true" aria-controls="focus-now" data-focus-tab="now">Сейчас</button>
         {% if not watchlist %}<button type="button" id="tab-market" role="tab" aria-selected="false" aria-controls="focus-market" tabindex="-1" data-focus-tab="market">Детали рынка</button>{% endif %}
@@ -55,6 +55,7 @@
       {% if watchlist %}
       <form id="watch-form" class="panel watch-form"><div><label for="tickers">Какие акции отслеживать?</label><p class="muted">Введи тикеры через пробел или запятую. До 20 акций, обновление каждые 30 секунд. Выбери нужную акцию из подсказок.</p></div><div class="input-row"><div class="instrument-search-wrap"><input id="tickers" placeholder="SBER, GAZP, LKOH, YDEX" autocomplete="off" maxlength="320" role="combobox" aria-autocomplete="list" aria-expanded="false"><div id="tickers-suggestions" class="instrument-suggestions" role="listbox"></div></div><button class="button primary" type="submit">Добавить в обзор <span>＋</span></button></div><p class="form-message" id="watch-message" role="status"></p></form>
       <div class="watch-summary"><div><span class="muted">В обзоре</span><strong id="total-count">0</strong></div><div><span class="muted">Кандидаты покупки</span><strong class="positive" id="long-count">0</strong></div><div><span class="muted">Проверь продажу</span><strong class="negative" id="exit-count">0</strong></div><div><span class="muted">Ждать</span><strong id="wait-count">0</strong></div><div><span class="muted">Нет оценки</span><strong id="pending-count">0</strong></div><button class="button ghost" id="refresh" aria-label="Обновить котировки" title="Обновить котировки">Обновить ↻</button></div>
+      {% include "_notifications.html" with notification_mode="analysis-multi" %}
       <div class="section-heading"><h2>Список наблюдения</h2><span class="muted">Нажми на акцию для подробного разбора</span></div>
       <div id="watch-grid" class="watch-grid" aria-live="polite"></div>
 {% else %}      <section class="metrics-row"><div class="panel metric"><span>Активные покупки <i title="Доля объёма сделок, инициированных покупателями, за 5 минут">i</i></span><strong id="buy-share">—</strong><small>От объёма направленных сделок</small></div><div class="panel metric"><span>Объём к обычному</span><strong id="rvol">—</strong><small>Закрытая свеча / среднее 20 свечей</small></div><div class="panel metric"><span>Средняя цена дня</span><strong id="vwap">—</strong><small>VWAP по минутным свечам, МСК</small></div><div class="panel metric"><span>Разница покупки и продажи</span><strong id="spread">—</strong><small>Спред · условие ≤ 0,10%</small></div></section>
@@ -133,7 +134,7 @@
       </section>
       <section id="focus-settings" class="focus-pane" role="tabpanel" aria-labelledby="tab-settings" data-focus-pane="settings" hidden>
         <div class="focus-section-heading"><h2>Риск и уведомления</h2><p>Настрой наблюдение и рассчитай допустимую сумму покупки.</p></div>
-        {% if watchlist %}{% include "_notifications.html" with notification_mode="analysis-multi" %}{% else %}{% include "_notifications.html" with notification_mode="analysis-single" %}{% endif %}
+        {% if watchlist %}<p class="notification-entry"><a class="button ghost" href="#notification-panel">Уведомления списка наблюдения ↗</a></p>{% else %}{% include "_notifications.html" with notification_mode="analysis-single" %}{% endif %}
         {% if not watchlist %}      <section class="panel research-panel risk-panel" aria-labelledby="risk-heading">
         <div class="section-heading"><div><p class="eyebrow">ПЛАНИРОВАНИЕ ПОКУПКИ</p><h2 id="risk-heading">Сколько акций я могу купить?</h2></div><span class="badge" id="risk-symbol">SBER</span></div>
         <p class="muted">Задай сумму и цены. Покажем, сколько акций помещается в твой бюджет и допустимый риск.</p>

@@ -94,6 +94,21 @@ def update(key):
             ENTRIES[key].update(response={"status":"error","mode":mode,"ticker":ticker,"message":error_message(exc)},pending=False,finished=time.monotonic())
 
 
+def cached_signals(tickers):
+    """Trusted completed server results only; never fetch or accept browser payloads."""
+    now=time.monotonic()
+    with LOCK:
+        result={}
+        for ticker in tickers:
+            entry=ENTRIES.get(('live',ticker))
+            if not entry or not entry.get('response'):
+                continue
+            payload=entry['response']
+            # A pending refresh or an expired cache cannot be a new notification.
+            result[ticker]={**payload,'refreshing':bool(entry.get('pending') or now-entry['finished']>=TTL)}
+        return result
+
+
 def get_signal(mode,ticker):
     key=(mode,ticker)
     with LOCK:

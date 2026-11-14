@@ -1,7 +1,8 @@
 <details id="notification-panel" class="notification-panel" data-notification-mode="{{ notification_mode }}">
   <summary><span class="notification-caption"><span aria-hidden="true">◉</span> Уведомления</span><small data-channel-count>Проверяем…</small></summary>
   <div class="notification-body">
-    <p class="eyebrow">{% if notification_mode == 'analysis-single' %}АНАЛИЗ ОДНОЙ АКЦИИ{% elif notification_mode == 'analysis-multi' %}АНАЛИЗ СПИСКА АКЦИЙ{% elif notification_mode == 'radar-single' %}ОДИНОЧНЫЙ РАДАР ЗАЯВОК{% else %}МУЛЬТИ-РАДАР ЗАЯВОК{% endif %}</p>
+    <p class="eyebrow">{% if notification_mode == 'analysis-single' %}АНАЛИЗ ОДНОЙ АКЦИИ{% elif notification_mode == 'analysis-multi' %}СПИСОК НАБЛЮДЕНИЯ · КАНДИДАТЫ В ЛОНГ{% elif notification_mode == 'radar-single' %}ОДИНОЧНЫЙ РАДАР ЗАЯВОК{% else %}МУЛЬТИ-РАДАР ЗАЯВОК{% endif %}</p>
+    {% if notification_mode == 'analysis-multi' %}<p class="notification-intro">Сообщим, какая акция из этого списка стала кандидатом для рассмотрения покупки. Критерии те же, что в карточках: все шесть условий, свежие реальные данные и отсутствие ошибок. Кандидат - не гарантия прибыли.</p><p class="notification-footnote">Открытая видимая страница обновляет анализ примерно раз в 30 секунд (пока данные загружаются - раз в 4 секунды), до 3 акций одновременно. В скрытой вкладке обновление страницы приостанавливается. Готовые результаты проверяются существующим серверным обработчиком примерно раз в 5 секунд.</p>{% endif %}
     <p class="notification-intro">Каналы работают независимо. Галочка сохраняет настройку, а приём сообщения подтверждается отдельно.</p>
     <div class="notification-channels">
       {% include "_notification_channel.html" with channel="vk" channel_label="ВКонтакте" %}

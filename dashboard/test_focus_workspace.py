@@ -54,7 +54,7 @@ class FocusWorkspaceTests(SimpleTestCase):
         page = WorkspaceMarkup(render_to_string('signals.html', {'watchlist': True}))
         self.assertEqual(page.owners['watch-form'], 'now')
         self.assertEqual(page.owners['watch-grid'], 'now')
-        self.assertEqual(page.owners['notification-panel'], 'settings')
+        self.assertEqual(page.owners['notification-panel'], 'now')
         self.assertNotIn('risk-form', page.ids)
         self.assertNotIn('tab-market', page.ids)
         self.assertEqual([t['data-focus-tab'] for t in page.tabs], ['now', 'research', 'settings'])

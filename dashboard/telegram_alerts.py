@@ -301,12 +301,20 @@ def worker_loop(stop=None, store=None):
             try:
                 cfg = store.config()
                 if cfg['enabled'] and store.transport.configured() and store.lease(owner, time.time()):
-                    from .signal_service import get_signal
+                    from .signal_service import get_signal, cached_signals
                     active = set(collector_status()['active_tickers'])
+                    watchlist = store.mode_config('multi')
+                    cached = cached_signals(watchlist['tickers']) if watchlist['enabled'] else {}
+                    # Ready page results need no broker job and must not wait behind
+                    # pending reads of other shares. Reuse the exact same episode ledger.
+                    for ticker, payload in cached.items():
+                        if stop.is_set():
+                            break
+                        store.observe(ticker, payload)
                     selected = [ticker for ticker in cfg['tickers'] if ticker in active]
                     queue.step(selected, get_signal, store.observe, time.monotonic())
                     store.heartbeat(owner, time.time(),
-                        f'В списке {len(cfg["tickers"])}. Сборщик наблюдает {len(selected)} из них. '
+                        f'В списке {len(cfg["tickers"])}. В потоке {len(active.intersection(cfg["tickers"]))}; готовы результаты страницы для {len(cached)}. '
                         'Анализ очередью, до 3 акций одновременно; для большого списка обход дольше.')
                 elif not cfg['enabled']:
                     store.release(owner)

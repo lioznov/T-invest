@@ -3,13 +3,13 @@
   const panel=document.querySelector('[data-notification-mode]');if(!panel)return;
   const mode=panel.dataset.notificationMode,analysis=mode.startsWith('analysis-'),multi=mode.endsWith('-multi');
   const url='/api/notifications/?mode='+encodeURIComponent(mode),find=s=>panel.querySelector(s);
-  let last=null,busy=false,syncFailedUntil=0,reachable=false;
+  let last=null,busy=false,syncFailedUntil=0,reachable=false,loadFailed=false;
   const rows=['vk','telegram'].map(channel=>({channel,node:find(`[data-channel="${channel}"]`)}));
   const by=(row,selector)=>row.node.querySelector(selector);
   function selected(){
     if(!analysis)return null;
     if(!multi){const text=document.getElementById('ticker-label')?.textContent || '';const ticker=text.split(' ·')[0].trim().toUpperCase();return /^[A-Z0-9][A-Z0-9.\-]{0,14}$/.test(ticker)?[ticker]:null;}
-    try{const value=JSON.parse(localStorage.getItem('vorby.watchlist'));if(Array.isArray(value))return value; }catch{}
+    try{const value=JSON.parse(localStorage.getItem('vorby.watchlist'));if(Array.isArray(value))return [...new Set(value.filter(t=>typeof t==='string'&&/^[A-Z0-9][A-Z0-9.\-]{0,14}$/.test(t)))].slice(0,20); }catch{}
     const cards=[...document.querySelectorAll('#watch-grid [data-remove]')];return cards.length?cards.map(e=>e.dataset.remove):null;
   }
   async function request(options={}){
@@ -49,7 +49,8 @@
         if(v.revision===0 && !v.enabled && v.configured && legacy)render(await post({channel:'telegram',enabled:true}));
       }
       await syncSelection();
-    }catch(error){reachable=false;syncFailedUntil=Date.now()+30000;find('[data-settings-status]').textContent=error.message+' Состояние отправки не подтверждено.';}
+      if(loadFailed){find('[data-settings-status]').textContent='Связь восстановлена. Состояние каналов обновлено.';loadFailed=false;}
+    }catch(error){loadFailed=true;reachable=false;syncFailedUntil=Date.now()+30000;find('[data-settings-status]').textContent=error.message+' Состояние отправки не подтверждено.';}
     finally{busy=false;lock();}
   }
   for(const row of rows){

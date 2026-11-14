@@ -96,3 +96,22 @@ test('network errors preserve the saved state and never trigger a test-message r
   assert.match(h.nodes.get('[data-settings-status]').textContent,/не подтверждено/);
   assert.equal(posts(h).length,0);
 });
+
+
+test('watchlist notifications match the displayed sanitized list and its twenty-stock limit',async()=>{
+  const tickers=['SBER','SBER','bad input',null,...Array.from({length:25},(_,i)=>'STOCK'+i)];
+  const h=harness('analysis-multi',{}, {'vorby.watchlist':JSON.stringify(tickers)});await h.tick();
+  h.rows.vk.get('input').checked=true;await h.rows.vk.get('input').handlers.change();
+  assert.deepEqual(posts(h)[0].tickers,['SBER',...Array.from({length:19},(_,i)=>'STOCK'+i)]);
+});
+
+
+test('recovered settings connection clears an obsolete network error without claiming delivery',async()=>{
+  const h=harness('analysis-multi');await h.tick();const fetch=h.context.fetch;
+  h.context.fetch=async()=>{throw Error('Нет связи');};await h.poll();
+  assert.match(h.nodes.get('[data-settings-status]').textContent,/Нет связи/);
+  h.context.fetch=fetch;await h.poll();
+  assert.match(h.nodes.get('[data-settings-status]').textContent,/Связь восстановлена/);
+  assert.equal(h.rows.vk.get('input').disabled,false);
+  assert.equal(posts(h).length,0);
+});

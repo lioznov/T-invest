@@ -16,6 +16,9 @@ from .test_telegram_alerts import payload, NOW
 
 class NotificationTests(TestCase):
     def setUp(self):
+        # Import the legacy search module without starting its broker cache loader.
+        with patch.dict(os.environ,{'INVEST_TOKEN':''}):
+            from . import views
         self.temp=TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.settings=override_settings(BASE_DIR=self.temp.name,ALLOWED_HOSTS=['testserver']);self.settings.enable();self.addCleanup(self.settings.disable)
         self.env=patch.dict(os.environ,{'INVEST_TOKEN':'synthetic-invest','TELEGRAM_BOT_TOKEN':'synthetic-tg','TELEGRAM_CHAT_ID':'123',
@@ -198,3 +201,52 @@ class NotificationTests(TestCase):
         for cls in (radar.Store,radar.TelegramStore):
             self.assertFalse(cls().status('single')['enabled'])
             self.assertFalse(cls().status('multi')['enabled'])
+
+    def test_watchlist_panel_is_next_to_results_and_has_only_one_pair_of_switches(self):
+        html=self.client.get('/watchlist/').content.decode()
+        self.assertEqual(html.count('id="notification-panel"'),1)
+        self.assertEqual(html.count('id="notify-vk"'),1)
+        self.assertEqual(html.count('id="notify-telegram"'),1)
+        self.assertLess(html.index('id="focus-now"'),html.index('id="notification-panel"'))
+        self.assertLess(html.index('id="notification-panel"'),html.index('id="watch-grid"'))
+        self.assertIn('data-notification-mode="analysis-multi"',html)
+        self.assertIn('СПИСОК НАБЛЮДЕНИЯ',html)
+
+    def test_watchlist_worker_consumes_trusted_ready_results_without_extra_broker_calls(self):
+        from . import signal_service
+        tickers=['SBER','GAZP','VTBR','NVTK','RTKM']
+        for channel in ('vk','telegram'):self.save('analysis-multi',channel,tickers=tickers)
+        good=payload(NOW);good['instrument']={'ticker':'SBER','name':'Сбербанк'}
+        blocked=payload(NOW);blocked['instrument']={'ticker':'GAZP'};blocked['analysis']['rules'][0]['pass']=False
+        stale=payload(NOW-100);stale['instrument']={'ticker':'VTBR'}
+        outside=payload(NOW);outside['instrument']={'ticker':'LKOH'}
+        last=payload(NOW);last['instrument']={'ticker':'RTKM','name':'Ростелеком'}
+        entries={('live',ticker):{'response':value,'pending':False,'finished':100}
+                 for ticker,value in [('SBER',good),('GAZP',blocked),('VTBR',stale),('NVTK',{'status':'error'}),('RTKM',last),('LKOH',outside)]}
+        with patch.dict(signal_service.ENTRIES,entries,clear=True), \
+             patch.object(tg.time,'time',return_value=NOW),patch.object(tg.time,'monotonic',return_value=100), \
+             patch.object(tg,'collector_status',return_value={'active_tickers':[]}), \
+             patch.object(signal_service,'get_signal') as fetch:
+            for cls in (tg.Store,vk.Store):
+                for _ in range(2):
+                    stop=Mock();stop.is_set.side_effect=[False,*([False]*5),True]
+                    tg.worker_loop(stop,cls())
+            fetch.assert_not_called()
+        # Ready results are not held up by a pending batch: the fifth share also sends.
+        for sender in (self.tg,self.vk):
+            self.assertEqual(sender.call_count,2)
+            self.assertIn('Сбербанк (SBER)',sender.call_args_list[0].args[0])
+            self.assertIn('Ростелеком (RTKM)',sender.call_args_list[1].args[0])
+            self.assertNotIn('LKOH',' '.join(call.args[0] for call in sender.call_args_list))
+
+    def test_cached_page_result_is_blocked_during_refresh_and_after_cache_expiry(self):
+        from . import signal_service
+        self.save('analysis-multi','vk')
+        for pending,age in ((True,0),(False,26)):
+            with self.subTest(pending=pending,age=age), \
+                 patch.dict(signal_service.ENTRIES,{('live','SBER'):{'response':payload(NOW),'pending':pending,'finished':100-age}},clear=True), \
+                 patch.object(signal_service.time,'monotonic',return_value=100):
+                value=signal_service.cached_signals(['SBER'])['SBER']
+                self.assertTrue(value['refreshing'])
+                self.assertEqual(vk.Store().observe('SBER',value,now=NOW),'blocked')
+        self.vk.assert_not_called()
