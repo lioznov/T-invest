@@ -15,11 +15,14 @@ class Command(BaseCommand):
         parser.add_argument('--seconds', type=int, default=28800)
         parser.add_argument('--max-mb', type=int, default=1000)
 
+    def get_tickers(self):
+        return Store().config()['tickers']
+
     def handle(self, *args, **options):
         token = os.getenv('INVEST_TOKEN', '').strip()
         if not token:
             raise CommandError('Для чтения нужен INVEST_TOKEN.')
-        tickers = Store().config()['tickers']
+        tickers = self.get_tickers()
         logger = logging.getLogger('t_tech.invest'); level = logger.level
         logger.setLevel(logging.CRITICAL)
         self.stdout.write(f'Список: {len(tickers)} акций. Группы до 50, смена раз в 15 минут. Без заявок и шорта. Ctrl+C — остановка.')

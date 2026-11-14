@@ -1,0 +1,8 @@
+<section class="notification-channel" data-channel="{{ channel }}">
+  <div class="notification-channel-heading"><strong>{{ channel_label }}</strong><label class="notification-switch"><input id="notify-{{ channel }}" type="checkbox" role="switch" aria-label="{{ channel_label }}" disabled><span aria-hidden="true"></span></label></div>
+  <p class="notification-state" data-channel-state role="status">Читаем настройку…</p>
+  <p class="notification-connection" data-channel-connection></p>
+  <p class="notification-delivery" data-channel-delivery role="status"></p>
+  <button class="button ghost" type="button" data-channel-test disabled>Тестовое сообщение</button>
+  <p class="notification-test-status" data-channel-test-status role="status"></p>
+</section>

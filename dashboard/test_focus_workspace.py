@@ -43,7 +43,7 @@ class FocusWorkspaceTests(SimpleTestCase):
             'market': ['rules', 'orderbook', 'technical-result', 'structure-status', 'pattern-items'],
             'research': ['ai-result', 'neural-result', 'morning-forecast', 'close-timing-research',
                          'multiyear-research', 'temporal-validation', 'research-form', 'paper-result', 'forward-result'],
-            'settings': ['telegram-form', 'risk-form', 'use-plan', 'monitor-health'],
+            'settings': ['notification-panel', 'risk-form', 'use-plan', 'monitor-health'],
         }
         for pane, ids in expected.items():
             for element in ids:
@@ -54,7 +54,7 @@ class FocusWorkspaceTests(SimpleTestCase):
         page = WorkspaceMarkup(render_to_string('signals.html', {'watchlist': True}))
         self.assertEqual(page.owners['watch-form'], 'now')
         self.assertEqual(page.owners['watch-grid'], 'now')
-        self.assertEqual(page.owners['telegram-form'], 'settings')
+        self.assertEqual(page.owners['notification-panel'], 'settings')
         self.assertNotIn('risk-form', page.ids)
         self.assertNotIn('tab-market', page.ids)
         self.assertEqual([t['data-focus-tab'] for t in page.tabs], ['now', 'research', 'settings'])

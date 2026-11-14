@@ -2,8 +2,6 @@ import collections
 import os
 import statistics
 import time
-import urllib.parse
-import urllib.request
 import certifi
 import threading
 import asyncio
@@ -32,8 +30,6 @@ os.environ["GRPC_DEFAULT_SSL_ROOTS_FILE_PATH"] = certifi.where()
 env_path = os.path.join(settings.BASE_DIR, '.env')
 load_dotenv(os.getenv('INVEST_ENV_FILE', env_path))
 
-TG_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TG_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 INVEST_TOKEN = os.getenv("INVEST_TOKEN")
 
 LOT_SIZE = 10
@@ -43,16 +39,12 @@ ANOMALY_MULTIPLIER = 3.0
 GLOBAL_DATA = {}
 ACTIVE_FIGI = None
 STREAM_THREAD = None
-BOT_ALERTS_ENABLED = False
-PREV_BOT_STATE = False
 
 # === 2. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ МУЛЬТИ-РАДАРА ===
 MULTI_GLOBAL_DATA = {}
 TRACKED_FIGIS = set()
 TICKER_CACHE = {}
 MULTI_STREAM_THREAD = None
-MULTI_BOT_ALERTS_ENABLED = False
-PREV_MULTI_BOT_STATE = False
 
 # === 3. ФОНОВЫЙ КЭШ ПОИСКА (ДЛЯ ТУРБО-СКОРОСТИ) ===
 CACHED_INSTRUMENTS = []
@@ -96,13 +88,9 @@ threading.Thread(target=_load_cache, daemon=True).start()
 
 
 def send_telegram_message(message):
-    if not TG_BOT_TOKEN or not TG_CHAT_ID: return
-    url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": TG_CHAT_ID, "text": message, "parse_mode": "HTML"}).encode("utf-8")
-    try:
-        urllib.request.urlopen(url, data=data)
-    except:
-        pass
+    # Compatibility helper; actual radar routing uses radar_vk's persisted channels.
+    from .telegram_transport import send
+    return send(message)
 
 
 # =========================================================================
@@ -151,10 +139,10 @@ def start_stream_in_thread(figi):
 
 
 async def stream_data(figi):
-    global GLOBAL_DATA, ACTIVE_FIGI, BOT_ALERTS_ENABLED
+    global GLOBAL_DATA, ACTIVE_FIGI
     history_bids = collections.deque(maxlen=30)
     history_asks = collections.deque(maxlen=30)
-    last_tg_alert, last_calib_time = 0, 0
+    last_calib_time = 0
     active_whales = {}
 
     while ACTIVE_FIGI == figi:
@@ -283,12 +271,6 @@ async def stream_data(figi):
                             vk_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
                             radar_vk.submit('single', figi, vk_msg)
 
-                            if current_time - last_tg_alert > 10 and BOT_ALERTS_ENABLED:
-                                ticker_name = TICKER_CACHE.get(figi, figi)
-                                tg_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
-                                await asyncio.to_thread(send_telegram_message, tg_msg)
-                                last_tg_alert = current_time
-
                         GLOBAL_DATA[figi] = {
                             "status": "ok", "bids": bids, "asks": asks,
                             "is_calibrating": is_calib, "anomaly_msg": anomaly_msg, "is_anomaly": is_anomaly,
@@ -318,12 +300,11 @@ def start_multi_stream_in_thread():
 
 
 async def multi_stream_data():
-    global MULTI_GLOBAL_DATA, TRACKED_FIGIS, MULTI_BOT_ALERTS_ENABLED
+    global MULTI_GLOBAL_DATA, TRACKED_FIGIS
     history_bids = collections.defaultdict(lambda: collections.deque(maxlen=30))
     history_asks = collections.defaultdict(lambda: collections.deque(maxlen=30))
     last_calib_time = collections.defaultdict(float)
     active_whales = collections.defaultdict(dict)
-    last_tg_alert = collections.defaultdict(float)
 
     while True:
         # Если список пуст, ждем. Иначе биржа закроет соединение с ошибкой "No active subscriptions"
@@ -463,12 +444,6 @@ async def multi_stream_data():
                             vk_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
                             radar_vk.submit('multi', figi, vk_msg)
 
-                            if current_time - last_tg_alert[figi] > 10 and MULTI_BOT_ALERTS_ENABLED:
-                                ticker_name = TICKER_CACHE.get(figi, figi)
-                                tg_msg = f"🔔 <b>{ticker_name}</b>\n\n" + "\n\n".join(alerts_to_send)
-                                await asyncio.to_thread(send_telegram_message, tg_msg)
-                                last_tg_alert[figi] = current_time
-
                         MULTI_GLOBAL_DATA[figi] = {
                             "status": "ok", "ticker": TICKER_CACHE.get(figi, figi),
                             "bids": bids, "asks": asks, "is_calibrating": is_calib,
@@ -495,11 +470,10 @@ def radar_page(request): return render(request, "radar.html", {"page_id": "radar
 
 
 def api_real_data(request):
-    global ACTIVE_FIGI, STREAM_THREAD, BOT_ALERTS_ENABLED, PREV_BOT_STATE
+    global ACTIVE_FIGI, STREAM_THREAD
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
 
     figi = request.GET.get('figi', 'BBG004730N88')
-    bot_state = request.GET.get('bot', 'false') == 'true'
 
     if figi not in TICKER_CACHE:
         try:
@@ -509,17 +483,6 @@ def api_real_data(request):
                 TICKER_CACHE[figi] = inst.instrument.ticker
         except Exception:
             TICKER_CACHE[figi] = figi
-
-    if bot_state != PREV_BOT_STATE:
-        if bot_state:
-            threading.Thread(target=send_telegram_message,
-                             args=("🟢 <b>[ОДИНОЧНЫЙ РАДАР] ВКЛЮЧЕН</b>\nУведомления активированы.",)).start()
-        else:
-            threading.Thread(target=send_telegram_message,
-                             args=("🔴 <b>[ОДИНОЧНЫЙ РАДАР] ВЫКЛЮЧЕН</b>\nУведомления приостановлены.",)).start()
-        PREV_BOT_STATE = bot_state
-
-    BOT_ALERTS_ENABLED = bot_state
 
     if ACTIVE_FIGI != figi:
         ACTIVE_FIGI = figi
@@ -531,7 +494,7 @@ def api_real_data(request):
 
 
 def api_radar_data(request):
-    global MULTI_STREAM_THREAD, MULTI_BOT_ALERTS_ENABLED, PREV_MULTI_BOT_STATE
+    global MULTI_STREAM_THREAD
     if not INVEST_TOKEN: return JsonResponse({"status": "error", "message": "Токен не найден!"})
 
     if not MULTI_STREAM_THREAD:
@@ -559,18 +522,7 @@ def api_radar_data(request):
             if f in MULTI_GLOBAL_DATA:
                 del MULTI_GLOBAL_DATA[f]
 
-    bot_state = request.GET.get('bot', 'false') == 'true'
 
-    if bot_state != PREV_MULTI_BOT_STATE:
-        if bot_state:
-            threading.Thread(target=send_telegram_message,
-                             args=("🟢 <b>[МУЛЬТИ-РАДАР] ВКЛЮЧЕН</b>\nГалерея активирована.",)).start()
-        else:
-            threading.Thread(target=send_telegram_message,
-                             args=("🔴 <b>[МУЛЬТИ-РАДАР] ВЫКЛЮЧЕН</b>\nУведомления из галереи приостановлены.",)).start()
-        PREV_MULTI_BOT_STATE = bot_state
-
-    MULTI_BOT_ALERTS_ENABLED = bot_state
     return JsonResponse({"status": "ok", "data": MULTI_GLOBAL_DATA})
 
 

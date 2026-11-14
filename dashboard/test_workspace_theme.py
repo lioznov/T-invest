@@ -13,7 +13,9 @@ class WorkspaceThemeTests(SimpleTestCase):
         for template,context in cases:
             with self.subTest(template=template,context=context):
                 html=render_to_string(template,context)
-                self.assertIn('css/workspace.css?v=5',html)
+                self.assertIn('css/studio.css?v=1',html)
+                self.assertNotIn('css/workspace.css',html)
+                self.assertNotIn('css/alpine.css',html)
                 self.assertIn('Основная навигация',html)
                 self.assertEqual(html.count('class="nav-icon"'),6)
 
@@ -31,11 +33,11 @@ class WorkspaceThemeTests(SimpleTestCase):
         self.assertIn('не «ничего не повлияет»',html)
 
     def test_shared_palette_does_not_reintroduce_muted_blue_primary(self):
-        css=(Path(settings.BASE_DIR)/'static/css/workspace.css').read_text(encoding='utf-8')
-        self.assertIn('--primary:#ffdd2d;',css)
+        css=(Path(settings.BASE_DIR)/'static/css/studio.css').read_text(encoding='utf-8')
+        self.assertIn('--primary:#C4E326;',css)
         self.assertNotIn('--primary:#8ca5ff;',css)
         self.assertIn('prefers-reduced-motion:reduce',css)
-        self.assertIn('repeat(6,minmax(0,1fr))',css)
+        self.assertIn('repeat(3,minmax(0,1fr))',css)
 
     def test_unknown_portfolio_values_remain_unknown(self):
         html=render_to_string('portfolio.html',{'page_id':'portfolio'})

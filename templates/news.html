@@ -14,13 +14,14 @@
 <main>
 <header class="topbar"><div class="breadcrumb">Личное пространство <span>/</span> Новости рынка</div><div class="top-status"><span class="tiny-dot"></span> RSS + корпоративные события</div></header>
 <div class="workspace news-workspace">
-  <div class="page-heading news-hero"><div><p class="eyebrow">НОВОСТИ И СОБЫТИЯ / VORBY PRO</p><h1>Рынок меняется.<br><em>Будь в контексте.</em></h1><p class="subtitle">События, мнения и реакция цены — в одном месте.<br>Отделяй смысл заголовка от обещаний заработать.</p></div><div class="news-hero-art" aria-hidden="true"><svg viewBox="0 0 200 170" fill="none"><rect x="42" y="13" width="118" height="140" rx="15" transform="rotate(8 42 13)" fill="#28d66e"/><rect x="29" y="9" width="118" height="140" rx="15" transform="rotate(-8 29 9)" fill="#ffdd2d"/><path d="m50 39 61-9M54 63l68-10M57 86l38-5M60 111l68-9" stroke="#1b1b1f" stroke-width="8" stroke-linecap="round"/><path d="m111 74 15-2 3 20-15 2z" fill="#1b1b1f"/></svg><span class="news-hero-label">БОЛЬШЕ КОНТЕКСТА</span></div></div>
+  <div class="page-heading news-hero"><div><p class="eyebrow">НОВОСТИ И СОБЫТИЯ / VORBY PRO</p><h1>Рынок меняется.<br><em>Будь в контексте.</em></h1><p class="subtitle">События, мнения и реакция цены — в одном месте.<br>Отделяй смысл заголовка от обещаний заработать.</p></div>{% include "_studio_art.html" %}</div>
   <div class="news-metrics" aria-label="Сводка ленты">
     <div><span>Событий в выборке</span><strong id="news-count">—</strong><small>Повторы сгруппированы</small></div>
     <div><span>Позитивных</span><strong id="news-positive">—</strong><small>Метка смысла, не прогноз роста</small></div>
     <div><span>Негативных</span><strong id="news-negative">—</strong><small>Не команда продавать</small></div>
     <div><span>Источников онлайн</span><strong id="news-source-count">—</strong><small>Доступность RSS-лент</small></div>
   </div>
+  <details class="studio-filter-drawer"><summary>Настроить ленту <span>Компании, источники и тональность ↗</span></summary>
   <form id="news-filters" class="panel news-filters" aria-label="Фильтры новостей">
     <label>КОМПАНИЯ<select id="news-ticker" name="ticker"><option value="">Все компании</option>{% for ticker in tickers %}<option value="{{ ticker }}">{{ ticker }}</option>{% endfor %}</select></label>
     <label>ИСТОЧНИК<select id="news-source" name="source"><option value="">Все доступные</option>{% for source in sources %}{% if source.enabled %}<option value="{{ source.id }}">{{ source.name }}</option>{% endif %}{% endfor %}</select></label>
@@ -33,6 +34,7 @@
     <label>Характер сообщения<select id="news-kind" form="news-filters"><option value="">События и мнения</option>{% for key,title in kinds.items %}<option value="{{ key }}">{{ title }}</option>{% endfor %}</select></label>
     <span class="badge">Заголовки, без полных статей</span>
   </div>
+  </details>
   <div class="news-layout">
     <section class="panel news-feed-panel" aria-labelledby="news-heading">
       <div class="section-heading"><div><p class="eyebrow">ЛЕНТА / СОБЫТИЯ</p><h2 id="news-heading">Что происходит на рынке</h2></div><button class="button ghost" type="button" id="news-refresh">Обновить вид</button></div>

@@ -4,8 +4,6 @@
 {% block nav_terminal %}active{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/radar_vk.css' %}?v=1">
-<script src="{% static 'js/radar_vk.js' %}?v=2" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 <style>
     /* Стили для переключателя бота */
@@ -28,15 +26,7 @@
     <div class="controls">
 
         <!-- Переключатель Telegram-бота -->
-        <div class="bot-control">
-            <label for="botToggle" style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-dark);">Telegram-бот</label>
-            <label class="switch">
-                <input type="checkbox" id="botToggle" onchange="updateBotState()">
-                <span class="slider"></span>
-            </label>
-        </div>
-
-        {% include "_radar_vk.html" with vk_scope="single" %}
+{% include "_notifications.html" with notification_mode="radar-single" %}
 
         <!-- УМНЫЙ ПОИСК -->
         <div class="search-container">
@@ -119,15 +109,6 @@
     let currentHistoricalCandle = null, isFetching = false, isChartBroken = false;
     let currentDepth = 50;
 
-    // === 1. Читаем состояние из памяти браузера (по умолчанию false) ===
-    let isBotEnabled = localStorage.getItem('investpro_bot_enabled') === 'true';
-
-    function updateBotState() {
-        isBotEnabled = document.getElementById('botToggle').checked;
-        // === 2. Сохраняем выбор в память при каждом клике ===
-        localStorage.setItem('investpro_bot_enabled', isBotEnabled);
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
         InstrumentSearch.attach({
             input: document.getElementById('searchInput'),
@@ -153,8 +134,8 @@
             timeScale: { timeVisible: true, secondsVisible: true },
         });
         candleSeries = chart.addCandlestickSeries({
-            upColor: '#80c8b3', downColor: '#e6a1ad', borderVisible: false,
-            wickUpColor: '#80c8b3', wickDownColor: '#e6a1ad'
+            upColor: '#C4E326', downColor: '#e6a1ad', borderVisible: false,
+            wickUpColor: '#C4E326', wickDownColor: '#e6a1ad'
         });
         isChartBroken = false;
     }
@@ -191,7 +172,7 @@
         const figi = document.getElementById('figiInput').value;
         const alertBox = document.getElementById('alertBox');
 
-        fetch(`/api/real-data/?figi=${figi}&bot=${isBotEnabled}`)
+        fetch(`/api/real-data/?figi=${figi}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === "loading") {
@@ -250,10 +231,10 @@
                     if (bid) {
                         const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= threshBid;
                         const fillPercent = (bid.quantity / maxVolume) * 100;
-                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to left, rgba(5, 150, 105, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
+                        const bg = isWhale ? '#C4E326' : `linear-gradient(to left, rgba(196, 227, 38, 0.18) ${fillPercent}%, transparent ${fillPercent}%)`;
                         const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
                         trHtml += `
-                            <td class="col-bid-price bid-price" style="${textStyle} ${isWhale ? 'background-color:#ffd60a;' : ''}">${bid.price.toFixed(2)}</td>
+                            <td class="col-bid-price bid-price" style="${textStyle} ${isWhale ? 'background-color:#C4E326;' : ''}">${bid.price.toFixed(2)}</td>
                             <td class="col-bid-vol" style="background: ${bg}; ${textStyle}">${bid.quantity}</td>
                         `;
                     } else { trHtml += `<td colspan="2"></td>`; }
@@ -261,11 +242,11 @@
                     if (ask) {
                         const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= threshAsk;
                         const fillPercent = (ask.quantity / maxVolume) * 100;
-                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to right, rgba(220, 38, 38, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
+                        const bg = isWhale ? '#C4E326' : `linear-gradient(to right, rgba(220, 38, 38, 0.25) ${fillPercent}%, transparent ${fillPercent}%)`;
                         const textStyle = isWhale ? 'color: #000 !important; font-weight: bold;' : '';
                         trHtml += `
                             <td class="col-ask-vol" style="background: ${bg}; ${textStyle}">${ask.quantity}</td>
-                            <td class="col-ask-price ask-price" style="${textStyle} ${isWhale ? 'background-color:#ffd60a;' : ''}">${ask.price.toFixed(2)}</td>
+                            <td class="col-ask-price ask-price" style="${textStyle} ${isWhale ? 'background-color:#C4E326;' : ''}">${ask.price.toFixed(2)}</td>
                         `;
                     } else { trHtml += `<td colspan="2"></td>`; }
 
@@ -286,7 +267,7 @@
         const figi = document.getElementById('figiInput').value;
 
         // === 3. Синхронизируем положение галочки с сохраненной памятью ===
-        document.getElementById('botToggle').checked = isBotEnabled;
+
 
         document.getElementById('orderbookBody').innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-gray);">Подключение к потоку биржи...</td></tr>';
         document.getElementById('totalBids').innerText = '0 ₽';

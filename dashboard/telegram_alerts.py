@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from django.conf import settings
@@ -72,16 +72,25 @@ def buy_candidate(a):
             and values[0] < values[1] < values[2])
 
 
-def message(ticker, a):
+def message(ticker, a, instrument=None):
     p = a['plan']
     def price(value):
         return format(value, '.12g')  # Never round a positive sub-rouble quote down to zero.
     at = datetime.fromisoformat(a['data_time']).astimezone(timezone.utc).strftime('%d.%m.%Y %H:%M:%S UTC')
-    return (f'<b>VORBY · Кандидат покупки · {html.escape(ticker)}</b>\n'
-            'Совпали 6 из 6 условий: тренд, активные покупки, объём, VWAP, узкий спред и устойчивый стакан.\n\n'
+    analysed = datetime.fromisoformat(a['updated_at']).astimezone(timezone(timedelta(hours=3))).strftime('%d.%m.%Y %H:%M:%S МСК')
+    name = (instrument or {}).get('name')
+    title = f'{html.escape(name[:120])} ({html.escape(ticker)})' if isinstance(name, str) and name.strip() else html.escape(ticker)
+    reasons = ('Цена выше растущей EMA 50 на 15 мин', 'Доля активных покупок не менее 58%',
+               'Объём свечи не менее 1,3 среднего', 'Цена удерживает среднюю дня VWAP',
+               'Спред не более 0,10%', 'Объём покупок возле цены устойчив на нескольких снимках')
+    current = a.get('price')
+    quote = f'Цена по данным анализа: {price(current)} ₽\n' if type(current) in (int,float) and math.isfinite(current) and current > 0 else ''
+    return (f'<b>VORBY · Анализ акции · Кандидат покупки · {title}</b>\n'
+            'Обнаружены условия для возможного входа в лонг. Акцию можно рассмотреть, а не покупать автоматически.\n'
+            'Совпали 6 из 6 условий:\n'+'\n'.join('• '+reason for reason in reasons)+'\n\n'+quote+
             f"Цена покупки по снимку: {price(p['entry'])} ₽\n"
             f"Стоп сценария: {price(p['stop'])} ₽\nЦель сценария: {price(p['target'])} ₽\n"
-            f'Снимок: {at}\n\n'
+            f'Время анализа: {analysed}\nСнимок: {at}\n\n'
             'Это сигнал правил, не рекомендация нейросети. Доходность не доказана. '
             'Цена уже могла измениться: проверь текущий стакан, шаг цены, комиссии и размер риска. '
             'Заявки автоматически не выставляются.')
@@ -90,6 +99,7 @@ def message(ticker, a):
 class Store:
     transport = transport
     filename = 'telegram.sqlite3'
+    channel_name = 'Telegram'
     setup_message = 'В .env нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID того же бота, что у радара.'
 
     def __init__(self, path=None):
@@ -109,6 +119,13 @@ class Store:
                     heartbeat REAL NOT NULL DEFAULT 0, message TEXT NOT NULL DEFAULT '');
                 INSERT OR IGNORE INTO worker(id,until) VALUES(1,0);
             ''')
+            # Reuse the existing channel, episode ledger and worker. Transfer the
+            # former standalone list to multi-analysis exactly once.
+            db.execute('CREATE TABLE IF NOT EXISTS subscriptions (scope TEXT PRIMARY KEY, enabled INTEGER NOT NULL, tickers TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0)')
+            first = db.execute("INSERT OR IGNORE INTO subscriptions SELECT 'multi',enabled,tickers,0 FROM config WHERE id=1").rowcount
+            db.execute("INSERT OR IGNORE INTO subscriptions VALUES('single',0,'[\"SBER\"]',0)")
+            if first:
+                db.execute('UPDATE config SET enabled=0 WHERE id=1')
 
     @contextmanager
     def db(self):
@@ -122,8 +139,50 @@ class Store:
 
     def config(self):
         with self.db() as db:
-            row = db.execute('SELECT * FROM config WHERE id=1').fetchone()
-        return {'enabled': bool(row['enabled']), 'tickers': json.loads(row['tickers']), 'revision': row['revision']}
+            return self._config(db)
+
+    def _config(self, db):
+        legacy = db.execute('SELECT * FROM config WHERE id=1').fetchone()
+        rows = [legacy, *db.execute('SELECT * FROM subscriptions').fetchall()]
+        tickers = list(dict.fromkeys(t for row in rows if row['enabled'] for t in json.loads(row['tickers'])))
+        return {'enabled': any(row['enabled'] for row in rows),
+                'tickers': tickers if any(row['enabled'] for row in rows) else json.loads(legacy['tickers']),
+                'revision': sum(row['revision'] for row in rows)}
+
+    def mode_config(self, scope):
+        if scope not in ('single','multi'):
+            raise ValueError('Неизвестный режим анализа.')
+        with self.db() as db:
+            row = db.execute('SELECT * FROM subscriptions WHERE scope=?',(scope,)).fetchone()
+        return {'enabled':bool(row['enabled']),'tickers':json.loads(row['tickers']), 'revision':row['revision']}
+
+    def save_mode(self, scope, enabled, tickers):
+        self.mode_config(scope)
+        if type(enabled) is not bool:
+            raise ValueError('Укажи положение переключателя.')
+        tickers = [] if tickers == [] else symbols(tickers)
+        if scope == 'single' and len(tickers)>1:
+            raise ValueError('Одиночный анализ отслеживает одну акцию.')
+        if enabled and not self.transport.configured():
+            raise ValueError(self.setup_message)
+        if enabled and not os.getenv('INVEST_TOKEN','').strip():
+            raise ValueError('Для живого анализа нужен INVEST_TOKEN в .env.')
+        with self.db() as db:
+            db.execute('UPDATE subscriptions SET enabled=?,tickers=?,revision=revision+1 WHERE scope=?',
+                       (int(enabled),json.dumps(tickers),scope))
+
+    def test_message(self):
+        if not self.transport.configured():
+            raise ValueError(self.setup_message)
+        now=time.time()
+        with self.db() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS test_attempt (id INTEGER PRIMARY KEY, at REAL NOT NULL)')
+            db.execute('BEGIN IMMEDIATE')
+            last=db.execute('SELECT at FROM test_attempt WHERE id=1').fetchone()
+            if last and now-last['at']<60:
+                raise ValueError('Между тестами нужна пауза не менее минуты.')
+            db.execute('INSERT OR REPLACE INTO test_attempt VALUES(1,?)',(now,))
+        return self.transport.send(f'VORBY · Проверка уведомлений {self.channel_name}.\nЭто тест подключения, не сигнал покупки.')
 
     def save(self, enabled, tickers):
         if type(enabled) is not bool:
@@ -135,7 +194,11 @@ class Store:
             raise ValueError('Для живых сигналов нужен INVEST_TOKEN.')
         with self.db() as db:
             db.execute('UPDATE config SET enabled=?,tickers=?,revision=revision+1 WHERE id=1',
-                       (int(enabled), json.dumps(tickers)))
+                       (0, json.dumps(tickers)))
+            # Compatibility endpoints now address the multi-analysis subscription,
+            # rather than leaving a hidden legacy subscription enabled.
+            db.execute("UPDATE subscriptions SET enabled=?,tickers=?,revision=revision+1 WHERE scope='multi'",
+                       (int(enabled),json.dumps(tickers)))
         # Deliberately preserve previous episodes across toggles and restarts.
 
     def lease(self, owner, now):
@@ -153,9 +216,11 @@ class Store:
         with self.db() as db:
             db.execute('UPDATE worker SET until=0 WHERE owner=?', (owner,))
 
-    def status(self, now=None):
+    def status(self, now=None, *, scope=None):
         now = time.time() if now is None else now
         result = self.config()
+        if scope is not None:
+            result.update(self.mode_config(scope))
         selected = set(result['tickers'])
         with self.db() as db:
             worker = db.execute('SELECT * FROM worker WHERE id=1').fetchone()
@@ -185,8 +250,8 @@ class Store:
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             # A settings update after the initial read must cancel this send.
-            current = db.execute('SELECT * FROM config WHERE id=1').fetchone()
-            if not current['enabled'] or ticker not in json.loads(current['tickers']):
+            current = self._config(db)
+            if not current['enabled'] or ticker not in current['tickers']:
                 return 'disabled'
             db.execute('INSERT OR IGNORE INTO episodes(ticker) VALUES(?)', (ticker,))
             row = db.execute('SELECT * FROM episodes WHERE ticker=?', (ticker,)).fetchone()
@@ -210,7 +275,7 @@ class Store:
             result = {'status': 'rejected', 'retry_after': 60, 'message': 'Сигнал устарел до отправки.'}
         else:
             try:
-                result = sender(message(ticker, a))
+                result = sender(message(ticker, a, payload.get('instrument')))
             except Exception:
                 result = {'status': 'unknown', 'message': 'Доставка не подтверждена; повтор этого сигнала отключён.'}
         outcome = result.get('status')

@@ -255,8 +255,8 @@ class AlertEndpointTests(TestCase):
             self.assertContainsText(response.content.decode())
 
     def assertContainsText(self, text):
-        for expected in ('id="telegram-form"', 'id="telegram-tickers"', 'js/telegram_alerts.js?v=2',
-                         'csrfmiddlewaretoken', 'Доходность', 'Нужен запущенный сборщик'):
+        for expected in ('id="notification-panel"', 'id="notify-vk"', 'js/notification_settings.js?v=1',
+                         'csrfmiddlewaretoken', 'Доходность', 'Сбор ограничен 8 часами и 1 ГБ.'):
             self.assertIn(expected, text)
 
     def test_large_list_saves_over_old_4kb_limit_without_enabling(self):

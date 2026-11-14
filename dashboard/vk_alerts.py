@@ -11,6 +11,7 @@ THREAD = None
 class Store(core.Store):
     transport = vk_transport
     filename = 'vk.sqlite3'
+    channel_name = 'ВКонтакте'
     setup_message = 'В серверном .env нужны VK_COMMUNITY_TOKEN и VK_USER_ID. Затем перезапусти сайт.'
 
     def test_message(self):

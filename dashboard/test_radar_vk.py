@@ -115,11 +115,11 @@ class RadarVKTests(TestCase):
     def test_radar_pages_have_independent_scope_and_keep_telegram_switches(self):
         for template,scope,tg in [('real_market.html','single','botToggle'),('radar.html','multi','multiBotToggle')]:
             page=render_to_string(template)
-            self.assertIn(f'data-vk-radar="{scope}"',page)
-            self.assertIn(f'id="{tg}"',page)
-            self.assertIn('js/radar_vk.js',page)
+            self.assertIn(f'data-notification-mode="radar-{scope}"',page)
+            self.assertIn('id="notify-telegram"',page)
+            self.assertIn('js/notification_settings.js',page)
 
-    def test_both_real_stream_processors_forward_anomalies_to_vk_and_telegram(self):
+    def test_both_stream_processors_enqueue_once_without_legacy_sends(self):
         # Calibrate on 30 quiet snapshots, then introduce a large bid. No SDK connection.
         from . import views
         from t_tech.invest import Quotation
@@ -137,7 +137,7 @@ class RadarVKTests(TestCase):
             with self.subTest(scope=scope):
                 ticks=iter(range(1000,1100))
                 with patch.multiple(views,ACTIVE_FIGI='FIGI',TRACKED_FIGIS={'FIGI'},GLOBAL_DATA={},MULTI_GLOBAL_DATA={},
-                                    TICKER_CACHE={'FIGI':'SBER'},BOT_ALERTS_ENABLED=True,MULTI_BOT_ALERTS_ENABLED=True), \
+                                    TICKER_CACHE={'FIGI':'SBER'}), \
                      patch.object(views,'AsyncClient',return_value=FakeClient()), \
                      patch.object(views.time,'time',side_effect=lambda:next(ticks,1100)), \
                      patch.object(views,'send_telegram_message') as tg,patch.object(radar,'submit') as vk:
@@ -146,4 +146,4 @@ class RadarVKTests(TestCase):
                     self.assertEqual(vk.call_count,1)
                     self.assertEqual(vk.call_args.args[:2],(scope,'FIGI'))
                     self.assertIn('КАСКАД ПОКУПОК',vk.call_args.args[2])
-                    tg.assert_called_once()
+                    tg.assert_not_called()

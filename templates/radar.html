@@ -4,8 +4,6 @@
 {% block nav_radar %}active{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/radar_vk.css' %}?v=1">
-<script src="{% static 'js/radar_vk.js' %}?v=2" defer></script>
 <style>
     .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
     .switch input { opacity: 0; width: 0; height: 0; }
@@ -131,15 +129,7 @@
         </div>
 
         <!-- Переключатель Телеграм Мульти-Бота -->
-        <div class="bot-control">
-            <label for="multiBotToggle" style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-dark);">Telegram-бот</label>
-            <label class="switch">
-                <input type="checkbox" id="multiBotToggle" onchange="updateMultiBotState()">
-                <span class="slider"></span>
-            </label>
-        </div>
-
-        {% include "_radar_vk.html" with vk_scope="multi" %}
+{% include "_notifications.html" with notification_mode="radar-multi" %}
 
         <div class="search-container">
             <span class="search-icon">⌕</span>
@@ -157,13 +147,7 @@
 <script>
     const LOT_SIZE = 10;
 
-    let isMultiBotEnabled = localStorage.getItem('investpro_multibot_enabled') === 'true';
     let savedRadars = JSON.parse(localStorage.getItem('investpro_saved_radars') || '[]');
-
-    function updateMultiBotState() {
-        isMultiBotEnabled = document.getElementById('multiBotToggle').checked;
-        localStorage.setItem('investpro_multibot_enabled', isMultiBotEnabled);
-    }
 
     function toggleWatchlistDropdown() {
         const dd = document.getElementById('watchlistDropdown');
@@ -200,7 +184,7 @@
         const syncStr = savedRadars.map(r => `${r.figi}:${r.ticker}`).join(',');
         document.getElementById('watchlistCount').innerText = savedRadars.length;
 
-        fetch(`/api/radar-data/?bot=${isMultiBotEnabled}&sync=${syncStr}`)
+        fetch(`/api/radar-data/?sync=${syncStr}`)
             .then(res => res.json())
             .then(resp => {
                 if (resp.status !== 'ok') return;
@@ -260,7 +244,7 @@
                     let asksHtml = '';
                     visibleAsks.forEach(ask => {
                         const isWhale = (ask.price * ask.quantity * LOT_SIZE) >= (data.dynamic_whale_ask || 100000000);
-                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to right, rgba(220,38,38,0.2) ${(ask.quantity/maxVol)*100}%, transparent 0%)`;
+                        const bg = isWhale ? '#C4E326' : `linear-gradient(to right, rgba(220,38,38,0.2) ${(ask.quantity/maxVol)*100}%, transparent 0%)`;
                         const textStyle = isWhale ? 'font-weight:bold; color:#000;' : 'color: #dc2626;';
                         asksHtml += `<tr>
                             <td class="col-pr" style="text-align:left; ${textStyle}">${ask.price.toFixed(2)}</td>
@@ -271,7 +255,7 @@
                     let bidsHtml = '';
                     visibleBids.forEach(bid => {
                         const isWhale = (bid.price * bid.quantity * LOT_SIZE) >= (data.dynamic_whale_bid || 100000000);
-                        const bg = isWhale ? '#ffd60a' : `linear-gradient(to right, rgba(5,150,105,0.2) ${(bid.quantity/maxVol)*100}%, transparent 0%)`;
+                        const bg = isWhale ? '#C4E326' : `linear-gradient(to right, rgba(196,227,38,0.18) ${(bid.quantity/maxVol)*100}%, transparent 0%)`;
                         const textStyle = isWhale ? 'font-weight:bold; color:#000;' : 'color: #059669;';
                         bidsHtml += `<tr>
                             <td class="col-pr" style="text-align:left; ${textStyle}">${bid.price.toFixed(2)}</td>
@@ -307,7 +291,7 @@
     }
 
     window.onload = () => {
-        document.getElementById('multiBotToggle').checked = isMultiBotEnabled;
+
         fetchRadarData();
         setInterval(fetchRadarData, 1000);
     };

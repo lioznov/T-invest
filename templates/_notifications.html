@@ -1,0 +1,22 @@
+<details id="notification-panel" class="notification-panel" data-notification-mode="{{ notification_mode }}">
+  <summary><span class="notification-caption"><span aria-hidden="true">◉</span> Уведомления</span><small data-channel-count>Проверяем…</small></summary>
+  <div class="notification-body">
+    <p class="eyebrow">{% if notification_mode == 'analysis-single' %}АНАЛИЗ ОДНОЙ АКЦИИ{% elif notification_mode == 'analysis-multi' %}АНАЛИЗ СПИСКА АКЦИЙ{% elif notification_mode == 'radar-single' %}ОДИНОЧНЫЙ РАДАР ЗАЯВОК{% else %}МУЛЬТИ-РАДАР ЗАЯВОК{% endif %}</p>
+    <p class="notification-intro">Каналы работают независимо. Галочка сохраняет настройку, а приём сообщения подтверждается отдельно.</p>
+    <div class="notification-channels">
+      {% include "_notification_channel.html" with channel="vk" channel_label="ВКонтакте" %}
+      {% include "_notification_channel.html" with channel="telegram" channel_label="Telegram" %}
+    </div>
+    <p data-settings-status class="notification-feedback" role="status"></p>
+    {% if notification_mode == 'analysis-single' or notification_mode == 'analysis-multi' %}
+      <p data-selection class="notification-selection"></p>
+      <p data-monitor-status class="notification-runtime" role="status"></p>
+      <details class="notification-help"><summary>Как запустить наблюдение?</summary><p>Сохрани каналы и акции. Оставь сервер сайта включённым. В отдельном терминале из папки с manage.py запусти один общий сборщик:</p><code>python manage.py watch_notifications --seconds 28800</code><p>Перед этим останови прежний watch_vk / watch_telegram. Сбор ограничен 8 часами и 1 ГБ. После изменения списка перезапусти сборщик. Закрыть вкладку можно: сервер и сборщик должны продолжать работать.</p><p>До 50 акций в группе; при большем списке группа меняется раз в 15 минут. Анализ идёт очередью, до 3 акций одновременно. Вне активной группы сигналов нет; короткие события могут быть пропущены.</p></details>
+      <p class="notification-footnote">Только реальные свежие данные, нормальная сессия и все 6 условий анализа. Учебные котировки не создают сообщений. Один сигнал на непрерывное совпадение условий; повтор после сброса условий и не раньше 30 минут. Одна акция в двух режимах не создаёт дубль в одном канале. При неизвестной доставке автоматического повтора нет. Это повод рассмотреть акцию, не гарантия прибыли.</p>
+    {% else %}
+      <p class="notification-runtime">События заявок, а не сигналы анализа для входа в лонг. Для надёжной работы оставь страницу этого радара открытой и сервер включённым. Отдельный watch_notifications радару не нужен.</p>
+      <p class="notification-footnote">Подтверждения включения и выключения отправляются отдельно. События одной акции - не чаще раза в 10 секунд; одинаковое последнее событие не повторяется. Всплески и устаревшие сообщения могут быть пропущены.</p>
+    {% endif %}
+    <form data-notification-csrf hidden>{% csrf_token %}</form>
+  </div>
+</details>

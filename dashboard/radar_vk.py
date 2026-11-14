@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from contextlib import contextmanager
 from django.conf import settings
-from . import vk_transport
+from . import vk_transport, telegram_transport
 
 NAMES = {'single': 'Одиночный радар', 'multi': 'Мульти-радар'}
 PENDING = queue.Queue(maxsize=50)
@@ -16,15 +16,20 @@ THREAD = None
 
 
 class Store:
+    transport = vk_transport
+    filename = "radar-vk.sqlite3"
+    channel_name = "ВК"
+    setup_message = "Нужны VK_COMMUNITY_TOKEN и VK_USER_ID в .env и перезапуск сайта."
+
     def __init__(self, path=None):
-        self.path = Path(path) if path else Path(settings.BASE_DIR)/'data'/'radar-vk.sqlite3'
+        self.path = Path(path) if path else Path(settings.BASE_DIR)/'data'/self.filename
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.db() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS config (
                     scope TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0,
                     revision INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '',
-                    detail TEXT NOT NULL DEFAULT 'Уведомления ВК выключены.');
+                    detail TEXT NOT NULL DEFAULT 'Уведомления выключены.');
                 CREATE TABLE IF NOT EXISTS attempts (
                     scope TEXT NOT NULL, figi TEXT NOT NULL, at REAL NOT NULL,
                     digest TEXT NOT NULL, result TEXT NOT NULL, detail TEXT NOT NULL,
@@ -48,14 +53,14 @@ class Store:
         with self.db() as db:
             row = db.execute('SELECT * FROM config WHERE scope=?', (scope,)).fetchone()
         return {'scope': scope, 'enabled': bool(row['enabled']),
-                'configured': vk_transport.configured(), 'result': row['result'],
-                'message': row['detail']}
+                'configured': self.transport.configured(), 'result': row['result'],
+                'message': row['detail'], 'revision': row['revision']}
 
     def set_enabled(self, scope, enabled):
         if scope not in NAMES or type(enabled) is not bool:
             raise ValueError('Укажи радар и положение галочки.')
-        if enabled and not vk_transport.configured():
-            raise ValueError('ВК не настроен: нужны VK_COMMUNITY_TOKEN и VK_USER_ID в .env и перезапуск сайта.')
+        if enabled and not self.transport.configured():
+            raise ValueError(self.setup_message)
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM config WHERE scope=?', (scope,)).fetchone()
@@ -67,17 +72,17 @@ class Store:
                     (int(enabled), revision, 'unknown', 'Настройка сохранена. Подтверждение отправки ожидается.', scope))
         if changed:
             state = 'включены' if enabled else 'выключены'
-            text = f'VORBY · {NAMES[scope]}\nУведомления ВК {state}.'
+            text = f'VORBY · {NAMES[scope]}\nУведомления {self.channel_name} {state}.'
             if enabled:
                 text += '\nСобытия придут после подключения биржевого потока и появления изменений в стакане. Это не сигнал покупки.'
-            outcome = vk_transport.send(text)
+            outcome = self.transport.send(text)
             with self.db() as db:
                 db.execute('UPDATE config SET result=?,detail=? WHERE scope=? AND revision=?',
                     (outcome['status'], outcome['message'], scope, revision))
         return self.status(scope)
 
     def observe(self, scope, figi, message, *, now=None, created=None):
-        if scope not in NAMES or not vk_transport.configured():
+        if scope not in NAMES or not self.transport.configured():
             return 'disabled'
         now = time.time() if now is None else now
         digest = hashlib.sha256(message.encode('utf-8')).hexdigest()
@@ -93,9 +98,9 @@ class Store:
                 return 'suppressed'
             # Reserve before the API call, including ambiguous failures and process restarts.
             db.execute('INSERT OR REPLACE INTO attempts VALUES(?,?,?,?,?,?)',
-                (scope, figi, now, digest, 'unknown', 'Приём ВК ещё не подтверждён.'))
+                (scope, figi, now, digest, 'unknown', f'Приём {self.channel_name} ещё не подтверждён.'))
         text = message+'\n\nСобытие стакана, не рекомендация покупать. Заявка может быть снята.'
-        outcome = vk_transport.send(text)
+        outcome = self.transport.send(text)
         with self.db() as db:
             db.execute('UPDATE attempts SET result=?,detail=? WHERE scope=? AND figi=? AND at=?',
                 (outcome['status'], outcome['message'], scope, figi, now))
@@ -104,12 +109,23 @@ class Store:
         return outcome['status']
 
 
+class TelegramStore(Store):
+    transport = telegram_transport
+    filename = 'radar-telegram.sqlite3'
+    channel_name = 'Telegram'
+    setup_message = 'Нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в .env и перезапуск сайта.'
+
+
 def _deliver(job):
+    return _deliver_to(job, Store)
+
+
+def _deliver_to(job, factory):
     scope, figi, message, created = job
     try:
         if not 0 <= time.time()-created <= 20:
             return 'stale'
-        store = Store()
+        store = factory()
         if time.time()-created > 20:
             return 'stale'
         return store.observe(scope, figi, message, created=created)
@@ -123,6 +139,7 @@ def _worker():
         job = PENDING.get()
         try:
             _deliver(job)
+            _deliver_to(job, TelegramStore)
         finally:
             PENDING.task_done()
 
