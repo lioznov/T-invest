@@ -1,0 +1,47 @@
+{
+  "artifact_sha256": "fb4b97563d67c9ae198935ac55fd6dd18b36e61a2810fc1600fa3bfe769b4796",
+  "evidence": {
+    "archive_data": "Сохранённые 15-минутные биржевые свечи Т-Банка по семи акциям",
+    "percent_definition": "Средняя абсолютная ошибка в процентах от фактической цены",
+    "limitations": "Эти даты следуют за обучением и настройкой диапазона. История ранее изучалась в проекте.",
+    "periods": {
+      "test": {
+        "samples": 133,
+        "days": 19,
+        "first_target_at": "2026-09-02T10:00:00+03:00",
+        "last_target_at": "2026-10-02T10:00:00+03:00",
+        "mae_rub": 15.022831402477143,
+        "mae_pct": 0.8872530856573536,
+        "baseline_mae_rub": 13.930751879699248,
+        "baseline_mae_pct": 0.8469098976445435,
+        "example": {
+          "ticker": "SBER",
+          "target_at": "2026-10-02T10:00:00+03:00",
+          "predicted_price": 275.35047925645495,
+          "actual_price": 275.93,
+          "error_rub": 0.5795207435450607,
+          "error_pct": 0.21002455098940334
+        }
+      },
+      "later": {
+        "samples": 63,
+        "days": 9,
+        "first_target_at": "2026-10-06T10:00:00+03:00",
+        "last_target_at": "2026-10-20T10:00:00+03:00",
+        "mae_rub": 15.23469301748077,
+        "mae_pct": 0.7880203900130405,
+        "baseline_mae_rub": 11.239365079365081,
+        "baseline_mae_pct": 0.6068892023373551,
+        "example": {
+          "ticker": "SBER",
+          "target_at": "2026-10-20T10:00:00+03:00",
+          "predicted_price": 287.32379231279555,
+          "actual_price": 290.9,
+          "error_rub": 3.5762076872044304,
+          "error_pct": 1.2293598099705847
+        }
+      }
+    }
+  },
+  "evidence_sha256": "845c9c797000053fe98d9dd50656e6039ec016bfcbcf6c7cfff5e995cc2f0fb7"
+}

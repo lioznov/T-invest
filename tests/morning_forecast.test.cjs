@@ -7,21 +7,6 @@ const api=require('../static/js/morning_forecast.js');
 const script=fs.readFileSync(path.join(__dirname,'../static/js/morning_forecast.js'),'utf8');
 const future='2099-10-22T07:00:00+00:00';
 const valid=()=>({status:'ok',ticker:'SBER',entry_allowed:false,forecast:{as_of:'2099-10-21T14:45:00+00:00',target_at:future,anchor_price:300,predicted_price:303,lower_price:295,upper_price:310,predicted_change_pct:1,direction:'up'}});
-test('top result compares to the displayed quote and rejects archive, demo and other instruments',()=>{
-  const selection={ticker:'SBER',mode:'live'};
-  const quote={...selection,price:300};
-  const now=Date.parse('2099-10-21T14:53:00Z');
-  const value=valid();
-  value.forecast.anchor_price=299;
-  const shown=api.overviewState(value,selection,quote,now);
-  assert.equal(shown.forecast.predicted_price,303);
-  assert.equal(shown.delta,3);
-  assert.equal(shown.percentChange,1);
-  assert.equal(api.overviewState(value,selection,{...quote,ticker:'GAZP'},now).delta,undefined);
-  assert.equal(api.overviewState(value,{...selection,ticker:'GAZP'},quote,now).forecast,undefined);
-  assert.equal(api.overviewState(value,{...selection,mode:'demo'},quote,now).forecast,undefined);
-  assert.equal(api.overviewState(value,selection,quote,Date.parse('2099-10-21T15:00:00Z')).state,'historical');
-});
 function harness(value=valid(),options={}){
   const nodes=new Map();
   function node(tag='div'){return {tagName:tag,textContent:'',value:'SBER',disabled:false,children:[],dataset:{},append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},addEventListener(name,handler){this[name]=handler;}};}
@@ -94,6 +79,19 @@ test('no observations or zero trades are not presented as zero-percent profitabl
   const value=valid();value.report={trained_rows:100,calibration_rows:20,periods:{test:{samples:10,days:5,paper:{trades:0,net_return_pct:0,unknown_trades:0}},later:{samples:0,paper:{trades:0}}}};
   const h=harness(value);await h.tick();const text=h.text(h.nodes.get('morning-report'));
   assert.match(text,/Условных сделок нет/);assert.match(text,/Нет оценённых прогнозов/);assert.match(text,/неизвестным исходом: 0/);assert.doesNotMatch(text,/Результат после расходов: 0/);
+});
+test('archive shows verified replay error in roubles and against the actual opening price',async()=>{
+  const value=valid();
+  value.replay={periods:{test:{
+    samples:2,first_target_at:'2026-09-02T07:00:00Z',last_target_at:'2026-09-03T07:00:00Z',
+    mae_rub:2.75,mae_pct:.8,baseline_mae_rub:2,baseline_mae_pct:.65,
+    example:{ticker:'SBER',target_at:'2026-09-03T07:00:00Z',predicted_price:304,actual_price:300,error_rub:4,error_pct:1.33},
+  }}};
+  const h=harness(value);await h.tick();
+  const text=h.text(h.nodes.get('morning-report'));
+  assert.match(text,/2,75 ₽ · 0,80%/);
+  assert.match(text,/Расчёт 304,00 ₽, факт 300,00 ₽, ошибка 4,00 ₽/);
+  assert.match(text,/относительно фактической цены открытия/);
 });
 test('report compares errors with unchanged-price baseline and discloses costs and unknowns',async()=>{
   const value=valid();value.report={periods:{test:{samples:20,days:10,mae_bps:45,baseline_mae_bps:60,mean_baseline_mae_bps:58,direction_accuracy_pct:55,direction_nonzero_samples:18,coverage_pct:75,interval_width_bps:200,abstention_pct:92,paper:{status:'ok',trades:5,net_return_pct:-2,max_drawdown_pct:3,unknown_trades:0,stress_return_pct:-3,stress_unknown_trades:0}}}};

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% if watchlist %}Обзор акций{% else %}Анализ акции{% endif %} — vorby pro</title>
-  <link rel="stylesheet" href="{% static 'css/signals.css' %}?v=9">
+  <link rel="stylesheet" href="{% static 'css/signals.css' %}?v=10">
   <link rel="stylesheet" href="{% static 'css/ai.css' %}?v=3">
   <link rel="stylesheet" href="{% static 'css/market_structure.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/technical_chart.css' %}?v=1">
@@ -12,12 +12,12 @@
   <link rel="stylesheet" href="{% static 'css/instrument_search.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/telegram_alerts.css' %}?v=2">
   <link rel="stylesheet" href="{% static 'css/morning_forecast.css' %}?v=1">
-  <link rel="stylesheet" href="{% static 'css/close_timing.css' %}?v=2">
+  <link rel="stylesheet" href="{% static 'css/close_timing.css' %}?v=3">
   <link rel="stylesheet" href="{% static 'css/multiyear_research.css' %}?v=2">
   <link rel="stylesheet" href="{% static 'css/temporal_validation.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/trading_helper.css' %}?v=1">
   {% include "_theme_head.html" %}
-  {% if not watchlist %}<link rel="stylesheet" href="{% static 'css/stock_analysis.css' %}?v=2">{% endif %}
+  {% if not watchlist %}<link rel="stylesheet" href="{% static 'css/stock_analysis.css' %}?v=3"><link rel="stylesheet" href="{% static 'css/forecast_workflow.css' %}?v=1">{% endif %}
   <script src="{% static 'js/instrument_search.js' %}?v=1" defer></script>
   <script src="{% static 'js/market_structure.js' %}?v=1" defer></script>
   <script src="{% static 'js/technical_chart.js' %}?v=1" defer></script>
@@ -25,32 +25,29 @@
   <script src="{% static 'js/chart_ui.js' %}?v=2" defer></script>
   <script src="{% static 'js/trading_helper.js' %}?v=1" defer></script>
   <script src="{% static 'js/risk_ui.js' %}?v=1" defer></script>
-  {% if not watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=2" defer></script>{% endif %}
-  <script src="{% static 'js/signals.js' %}?v=36" defer></script>
+  {% if not watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=3" defer></script><script src="{% static 'js/forecast_workflow.js' %}?v=1" defer></script>{% endif %}
+  <script src="{% static 'js/signals.js' %}?v=37" defer></script>
   <script src="{% static 'js/news.js' %}?v=2" defer></script>
-  {% if watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=2" defer></script>{% endif %}
+  {% if watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=3" defer></script>{% endif %}
   <script src="{% static 'js/close_timing.js' %}?v=2" defer></script>
   <script src="{% static 'js/multiyear_research.js' %}?v=2" defer></script>
   <script src="{% static 'js/temporal_validation.js' %}?v=1" defer></script>
-  <script src="{% static 'js/workspace_focus.js' %}?v=3" defer></script>
+  <script src="{% static 'js/workspace_focus.js' %}?v=4" defer></script>
 </head>
-<body class="focus-workspace" data-page="{% if watchlist %}watchlist{% else %}single{% endif %}" data-token="{{ has_token|yesno:'true,false' }}">
+<body class="focus-workspace" data-page="{% if watchlist %}watchlist{% else %}single{% endif %}" data-token="{{ has_token|yesno:'true,false' }}" data-forecast-tickers="{{ forecast_tickers|join:' ' }}">
   {% if watchlist %}{% include "_app_sidebar.html" with active_page="watchlist" %}{% else %}{% include "_app_sidebar.html" with active_page="single" %}{% endif %}
   <main>
     <header class="topbar"><div class="breadcrumb">Рабочее пространство <span>/</span> {% if watchlist %}Обзор акций{% else %}Анализ акции{% endif %}</div><div class="top-status"><span class="tiny-dot"></span> Только анализ <span class="separator">|</span><span id="clock"></span></div></header>
     <div class="workspace">
-      <div class="page-heading focus-heading">{% include "_studio_art.html" %}<div><p class="eyebrow">ЛИЧНЫЙ ТЕРМИНАЛ</p><h1>{% if watchlist %}Рынок под контролем{% else %}Главное по акции{% endif %}</h1><p class="subtitle">{% if watchlist %}Все выбранные акции и их состояние — в одном месте.{% else %}Что происходит сейчас и на что обратить внимание.{% endif %}</p></div><div class="mode-switch" role="group" aria-label="Источник данных"><button data-mode="live" class="selected">Рынок</button><button data-mode="demo">Учебный режим</button></div></div>
+      <div class="page-heading focus-heading{% if not watchlist %} forecast-page-heading{% endif %}">{% if watchlist %}{% include "_studio_art.html" %}{% endif %}<div><h1>{% if watchlist %}Рынок под контролем{% else %}Прогноз цены акции{% endif %}</h1>{% if watchlist %}<p class="subtitle">Все выбранные акции и их состояние в одном месте.</p>{% endif %}</div><div class="mode-switch" role="group" aria-label="Источник данных"><button data-mode="live" class="selected">Рынок</button><button data-mode="demo">Учебный режим</button></div></div>
       {% if not watchlist %}
-      <div class="instrument-toolbar"><form id="symbol-form" class="symbol-form"><label class="sr-only" for="symbol">Тикер акции</label><span class="search-icon">⌕</span><div class="instrument-search-wrap"><input id="symbol" value="SBER" placeholder="Тикер, например SBER" maxlength="15" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"><div id="symbol-suggestions" class="instrument-suggestions" role="listbox"></div></div><button type="submit" class="button primary">Анализировать</button></form><span class="market-tag">АКЦИИ · TQBR · ₽</span><button class="button ghost" id="refresh" aria-label="Обновить котировки" title="Обновить котировки">Обновить ↻</button></div>
-      <div id="load-status" role="status" class="load-status"></div>
-      <p id="data-quality" class="research-meta" role="status"></p>
+      <div class="instrument-toolbar"><form id="symbol-form" class="symbol-form"><label class="sr-only" for="symbol">Тикер акции</label><span class="search-icon">⌕</span><div class="instrument-search-wrap"><input id="symbol" value="SBER" placeholder="Тикер, например SBER" maxlength="15" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"><div id="symbol-suggestions" class="instrument-suggestions" role="listbox"></div></div><button type="submit" class="button primary">Выбрать</button></form><button class="button ghost" id="refresh" aria-label="Обновить котировки" title="Обновить котировки">Обновить ↻</button></div>
 {% endif %}
       <div id="mode-banner" class="notice" role="status"></div>
-      {% if not watchlist %}<p class="notification-entry"><a class="button ghost" href="#notification-panel">Настроить уведомления анализа ↗</a></p>{% endif %}
-      <div class="studio-workbench"><nav class="focus-tabs" aria-label="Разделы анализа" role="tablist"><p class="studio-rail-label">РАБОЧАЯ ОБЛАСТЬ</p>
-        <button type="button" id="tab-now" role="tab" aria-selected="true" aria-controls="focus-now" data-focus-tab="now">Сейчас</button>
-        {% if not watchlist %}<button type="button" id="tab-market" role="tab" aria-selected="false" aria-controls="focus-market" tabindex="-1" data-focus-tab="market">Детали рынка</button>{% endif %}
-        <button type="button" id="tab-research" role="tab" aria-selected="false" aria-controls="focus-research" tabindex="-1" data-focus-tab="research">Проверка моделей</button>
+      <div class="studio-workbench"><nav class="focus-tabs" aria-label="Разделы анализа" role="tablist">
+        <button type="button" id="tab-now" role="tab" aria-selected="true" aria-controls="focus-now" data-focus-tab="now">{% if watchlist %}Список акций{% else %}Прогноз и график{% endif %}</button>
+        {% if not watchlist %}<button type="button" id="tab-market" role="tab" aria-selected="false" aria-controls="focus-market" tabindex="-1" data-focus-tab="market">Цена и заявки</button>{% endif %}
+        <button type="button" id="tab-research" role="tab" aria-selected="false" aria-controls="focus-research" tabindex="-1" data-focus-tab="research">История и проверки</button>
         <button type="button" id="tab-settings" role="tab" aria-selected="false" aria-controls="focus-settings" tabindex="-1" data-focus-tab="settings">Настройки</button>
       </nav>
       <section id="focus-now" class="focus-pane" role="tabpanel" aria-labelledby="tab-now" data-focus-pane="now">
@@ -62,10 +59,11 @@
       <div id="watch-grid" class="watch-grid" aria-live="polite"></div>
 {% else %}
       {% include "_stock_analysis_result.html" %}
+      <p id="load-status" class="load-status" role="status"></p>
       <section class="panel analysis-chart chart-panel" aria-labelledby="price-chart-heading">
         <div class="analysis-chart-heading">
           <h2 id="price-chart-heading">Как менялась цена</h2>
-          <p>Свечи показывают цены за 15 минут. Линии помогают увидеть тренд и среднюю цену с учётом объёма.</p>
+          <p>История цены по 15-минутным свечам.</p>
         </div>
         <ul class="analysis-legend" aria-label="Обозначения цены">
           <li class="legend-up">Рост или без изменений</li><li class="legend-down">Снижение</li>
@@ -76,6 +74,9 @@
         <details class="chart-options"><summary>Линии и уровни на графике</summary><div class="structure-layers" role="group" aria-label="Слои разметки графика"><label><input type="checkbox" data-structure-layer="levels">Поддержка / сопротивление</label><label><input type="checkbox" data-structure-layer="trends">Линии тренда</label><label><input type="checkbox" data-structure-layer="pivots">Максимумы / минимумы</label><label><input type="checkbox" data-structure-layer="events">Пробои / отскоки</label><label class="technical-channel-key"><input type="checkbox" data-structure-layer="channels">Коридоры 20 / 60</label><label class="technical-book-key"><input type="checkbox" data-structure-layer="book">Заявки возле уровней</label><label><input type="checkbox" data-structure-layer="patterns">Фигуры на графике</label></div></details>
         <div class="chart-footer"><span>Закрытые свечи · 15 минут</span><span id="chart-period">—</span></div>
       </section>
+      <details class="panel focus-disclosure analysis-extra" id="analysis-volume">
+        <summary>Объём торгов</summary>
+        <div class="focus-disclosure-body">
       <section class="panel analysis-chart volume-panel" aria-labelledby="volume-chart-heading">
         <div class="analysis-chart-heading">
           <h2 id="volume-chart-heading">Объём торгов</h2>
@@ -84,18 +85,27 @@
         <div class="chart-wrap"><svg id="volume-chart" role="img" tabindex="0" aria-label="Объём торгов в лотах. Используй клавиши со стрелками для просмотра столбцов." viewBox="0 0 800 210"></svg><div id="volume-empty" class="chart-empty">Здесь появится объём торгов</div></div>
         <p id="volume-chart-reading" class="analysis-chart-reading">Наведи курсор или коснись столбца, чтобы увидеть объём.</p>
       </section>
+        </div>
+      </details>
+      <details class="panel focus-disclosure analysis-extra" id="analysis-indicators">
+        <summary>Что происходит с акцией сейчас</summary>
+        <div class="focus-disclosure-body">
       <section class="analysis-detail-grid" aria-label="Подробные показатели">
+        <p id="data-quality" class="research-meta" role="status"></p>
       <section class="metrics-row"><div class="panel metric"><span>Активные покупки <i title="Доля объёма сделок, инициированных покупателями, за 5 минут">i</i></span><strong id="buy-share">—</strong><small>От объёма направленных сделок</small></div><div class="panel metric"><span>Объём к среднему</span><strong id="rvol">—</strong><small>Закрытая свеча / среднее 20 свечей</small></div><div class="panel metric"><span>Средняя цена дня</span><strong id="vwap">—</strong><small>VWAP по минутным свечам, МСК</small></div><div class="panel metric"><span>Разница покупки и продажи</span><strong id="spread">—</strong><small>Спред · условие ≤ 0,10%</small></div></section>
         <div id="signal-panel" class="panel signal-panel"><p class="eyebrow">СЕЙЧАС ПО АКЦИИ</p><div class="signal-title"><span id="decision" class="decision">Ожидание</span><span id="score" class="score">—<small>/100</small></span></div><p id="decision-text" class="muted">Собираем данные для шести условий.</p><div class="score-track"><span id="score-fill"></span></div><div class="score-description"><span id="passed">0 из 6 условий покупки</span><span>Баллы покупки, не вероятность</span></div><div id="blockers" class="blockers"></div><div class="next-step"><span>Что делать дальше</span><p id="next-step">Дождись загрузки котировок. Оценка появится автоматически.</p><a href="#focus-market" class="focus-text-link">Посмотреть причины <span aria-hidden="true">↗</span></a></div><div class="signal-bottom"><span class="muted">Последний снимок стакана</span><strong id="data-time">—</strong></div></div>
       </section>
 
+        </div>
+      </details>
+      <details class="panel focus-disclosure analysis-extra"><summary>План покупки и новости акции</summary><div class="focus-disclosure-body">
 <div class="focus-context-grid"><div class="panel plan-panel"><p class="eyebrow">СЛЕДУЮЩИЙ ШАГ</p><h2>План покупки</h2><p class="plan-intro">Покупка, ограничение убытка и цель — когда появится подтверждённый сценарий.</p><div id="trade-plan"><p class="muted">План появится вместе с кандидатом покупки. При «Проверь продажу» оценивай выход только из уже открытой позиции.</p></div><div class="plain-note">Стоп — уровень ограничения убытка. Цель — ориентир, а не обещание роста. Проскальзывание может ухудшить результат.</div><a class="focus-text-link" href="#risk-form">Рассчитать размер позиции <span aria-hidden="true">↗</span></a></div>      <section class="panel news-mini" aria-labelledby="stock-news-heading">
         <div class="section-heading"><div><p class="eyebrow">РЕАЛЬНЫЕ RSS / НЕ СИГНАЛ ПОКУПКИ</p><h2 id="stock-news-heading">Новостной контекст акции</h2></div><a id="stock-news-link" href="/news/">Открыть всю ленту →</a></div>
         <p id="stock-news-status" class="muted" role="status">Проверяем новости компании и общие события экономики…</p>
         <div id="stock-news-items"></div>
         <p class="muted small">Это реальные заголовки, даже если график в учебном режиме. Новости пока не участвуют в расчёте ИИ. Подробности и проверка фактов — у первоисточника.</p>
       </section>
-</div><details class="panel focus-disclosure"><summary><span><strong>Объяснить оценку простыми словами</strong><small>Что учитывает помощник и почему он ждёт</small></span></summary><div class="focus-disclosure-body">      <section class="panel research-helper" aria-labelledby="research-helper-heading">
+</div></div></details><details class="panel focus-disclosure"><summary><span><strong>Объяснить оценку простыми словами</strong><small>Что учитывает помощник и почему он ждёт</small></span></summary><div class="focus-disclosure-body">      <section class="panel research-helper" aria-labelledby="research-helper-heading">
         <div class="section-heading"><div><p class="eyebrow">ОБЪЯСНЕНИЕ ОЦЕНКИ</p><h2 id="research-helper-heading">Помощник аналитика</h2></div><span class="badge">Данные · условия · риск</span></div>
         <p class="muted">Объясняет показания обученной нейросети и проверяет, достаточно ли данных для разбора.</p>
         <div id="research-helper" aria-live="polite"><p class="muted">Ожидаем оценку акции.</p></div>
@@ -125,8 +135,10 @@
       {% endif %}
       <section id="focus-research" class="focus-pane" role="tabpanel" aria-labelledby="tab-research" data-focus-pane="research" hidden>
         <div class="focus-section-heading"><h2>Насколько можно доверять моделям</h2><p>Здесь результаты проверок. Плюс на истории сам по себе не подтверждает будущую прибыль.</p></div>
-      <div class="models-strip">
-      <details class="panel ai-panel model-disclosure" aria-labelledby="ai-heading"><summary><span class="disclosure-index">MODEL / 01</span> Обученный ИИ · оценка условий</summary>
+      <details class="panel focus-disclosure"><summary>Архив прогноза и проверка модели</summary><div class="focus-disclosure-body">{% include "_morning_forecast.html" %}</div></details>
+      <details class="panel focus-disclosure"><summary>Другие модели анализа</summary>
+        <div class="focus-disclosure-body models-strip">
+      <details class="panel ai-panel model-disclosure" aria-labelledby="ai-heading"><summary>Оценка условий по графику</summary>
         <div class="section-heading"><div><p class="eyebrow">ЛОКАЛЬНАЯ ОБУЧЕННАЯ МОДЕЛЬ</p><h2 id="ai-heading">ИИ-анализ рынка</h2></div><span class="badge" id="ai-model-badge">Проверяем модель</span></div>
         <p class="muted" id="ai-model-description">Читаем результаты обучения и проверки.</p>
         <div id="ai-model-summary" class="ai-model-summary"></div>
@@ -135,14 +147,15 @@
         <div id="ai-result" class="ai-result" aria-live="polite"><p class="muted">Оценка появится после получения свежих данных акции.</p></div>
         <details class="ai-evidence"><summary>На чём обучен ИИ и как он прошёл проверку?</summary><div id="ai-model-evidence" class="research-meta">Результаты загружаются…</div></details>
       </details>
-      <details class="panel ai-panel neural-panel model-disclosure" aria-labelledby="neural-heading"><summary><span class="disclosure-index">MODEL / 02</span> Нейросеть · результат и риск</summary>
+      <details class="panel ai-panel neural-panel model-disclosure" aria-labelledby="neural-heading"><summary>Нейросеть для оценки риска</summary>
         <div class="section-heading"><div><p class="eyebrow">ОЦЕНКА РЕЗУЛЬТАТА И РИСКА</p><h2 id="neural-heading">Нейросеть-трейдер</h2></div><span class="badge">Исследовательская модель</span></div>
-        <p class="muted">Ищет условия для покупки на ближайший час: оценивает график, объём и возможный результат после расходов. Ожидаемый процент относится к сумме покупки. Для текущего сценария также нужен свежий стакан.</p>
+        <p class="muted">Оценивает движение на ближайший час по графику, объёму и свежим заявкам.</p>
         <div id="neural-result" class="ai-result" aria-live="polite"><p class="muted">Ожидаем данные акции.</p></div>
-        <details class="ai-evidence" open><summary>Как нейросеть торговала на истории?</summary><div id="neural-report" class="research-meta">Проверяем результаты обучения…</div></details>
+        <details class="ai-evidence"><summary>Как нейросеть прошла проверку?</summary><div id="neural-report" class="research-meta">Проверяем результаты обучения…</div></details>
       </details>
       </div>
-<details class="panel focus-disclosure"><summary><span><strong>Прогноз на следующее утро</strong><small>Отдельная исследовательская модель</small></span></summary><div class="focus-disclosure-body">{% include "_morning_forecast.html" %}</div></details>
+</details>
+
       {% include "_close_timing.html" %}
       {% include "_multiyear_research.html" %}
       {% include "_temporal_validation.html" %}
@@ -152,7 +165,7 @@
 </div></details>{% endif %}
       </section>
       <section id="focus-settings" class="focus-pane" role="tabpanel" aria-labelledby="tab-settings" data-focus-pane="settings" hidden>
-        <div class="focus-section-heading"><h2>Риск и уведомления</h2><p>Настрой наблюдение и рассчитай допустимую сумму покупки.</p></div>
+        <div class="focus-section-heading"><h2>Настройки наблюдения</h2></div>
         {% if watchlist %}<p class="notification-entry"><a class="button ghost" href="#notification-panel">Уведомления списка наблюдения ↗</a></p>{% else %}{% include "_notifications.html" with notification_mode="analysis-single" %}{% endif %}
         {% if not watchlist %}      <section class="panel research-panel risk-panel" aria-labelledby="risk-heading">
         <div class="section-heading"><div><p class="eyebrow">ПЛАНИРОВАНИЕ ПОКУПКИ</p><h2 id="risk-heading">Сколько акций я могу купить?</h2></div><span class="badge" id="risk-symbol">SBER</span></div>
@@ -180,7 +193,7 @@
       </section>
       <details class="panel focus-disclosure" id="data-connection"><summary><span><strong>Подключение данных</strong><small>Диагностика загрузки котировок</small></span></summary><div class="focus-disclosure-body"><p id="connection-detail" class="research-meta">Проверяем соединение. Учебный режим доступен без подключения к брокеру.</p></div></details>
 {% endif %}
-      <details class="panel pattern-research"><summary>Непрерывное наблюдение за рынком</summary><p id="monitor-health" class="research-meta" role="status">Проверяем фоновый сбор…</p><p class="muted small">Сборщик сохраняет стакан, ленту и закрытые свечи 1 и 15 минут даже без браузера. Это запись наблюдений, не доказательство доходности. Для отдельного анализа сигналов без браузера используется monitor_signals. Сон или выключение компьютера остановят сбор.</p></details>
+      {% include "_market_monitor.html" %}
       </section>
       </div>
       <footer class="workspace-footer"><span>vorby pro · Research terminal</span><span>Сигнал — повод изучить акцию. Доходность не гарантирована.</span></footer>

@@ -1,0 +1,12 @@
+<section class="panel market-monitor" aria-labelledby="market-monitor-heading">
+  <h3 id="market-monitor-heading">Фоновое наблюдение</h3>
+  <p id="monitor-health" role="status">Проверяем, запущено ли наблюдение…</p>
+  <p>Сборщик записывает цены, сделки и заявки. Вкладку можно закрыть, пока сборщик запущен. Сон и выключение компьютера останавливают сбор.</p>
+  <details>
+    <summary>Как запустить наблюдение</summary>
+    <p>Включи нужный канал в настройках уведомлений и выбери акции. Оставь сервер сайта включённым и запусти сборщик в отдельном терминале из папки с <code>manage.py</code>.</p>
+    <p><code>python manage.py watch_notifications --seconds 28800</code></p>
+    <p>Сборщик работает до 8 часов. Для проверки уведомлений используй кнопку «Тестовое сообщение» в настройках канала.</p>
+    <p id="monitor-detail" class="research-meta"></p>
+  </details>
+</section>

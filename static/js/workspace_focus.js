@@ -1,7 +1,7 @@
 /* Navigation only: existing analysis and data-quality rules remain authoritative. */
 (function () {
   'use strict';
-  if (document.body.dataset.page === 'single') {
+  if (document.body.classList.contains('focus-workspace')) {
     document.querySelectorAll('main details > summary').forEach(summary => {
       const label = document.createElement('span');
       label.className = 'disclosure-label';

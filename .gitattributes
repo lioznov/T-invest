@@ -1,0 +1,2 @@
+# Trained model artifacts verify Python sources by SHA-256.
+*.py text eol=lf

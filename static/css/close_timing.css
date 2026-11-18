@@ -23,3 +23,10 @@
 .close-timing-paired>summary{cursor:pointer;color:var(--text,#f4f4f5);font-weight:600;line-height:1.5}
 .close-timing-warning{border-left:3px solid var(--accent,#ffdf3a);padding:10px 14px;background:var(--surface-alt,#202124);line-height:1.6;overflow-wrap:anywhere}
 @media(max-width:600px){.close-timing-panel{padding:16px;border-radius:12px}.close-timing-panel>summary{gap:8px}.close-timing-panel>summary .badge{margin-left:0}.close-timing-scroll::after{content:'Таблицу можно прокрутить вправо →';display:block;padding:8px 12px;color:var(--muted,#aeb2bd);font-size:11px}.close-timing-table th,.close-timing-table td{padding:10px}}
+
+body .close-timing-panel .close-timing-warning {
+  color: #414d3d;
+  background: #eff2e9;
+  border-color: #788b54;
+  border-radius: 0 8px 8px 0;
+}

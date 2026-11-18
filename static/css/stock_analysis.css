@@ -84,27 +84,6 @@
 .analysis-detail-grid .signal-panel { margin: 0; }
 [data-page=single] .focus-context-grid { margin: 0; }
 
-/* Native details keep their keyboard and touch behavior with a shared disclosure icon. */
-[data-page=single] main details > summary {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: nowrap; gap: 12px; min-height: 44px;
-  list-style: none; cursor: pointer;
-}
-[data-page=single] main details > summary::-webkit-details-marker { display: none; }
-[data-page=single] main details > summary::before,
-[data-page=single] main details > summary.aligned-disclosure::after {
-  content: none;
-}
-.disclosure-label { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; min-width: 0; overflow-wrap: anywhere; }
-[data-page=single] main details > summary:not(.aligned-disclosure)::after,
-.disclosure-chevron {
-  content: "";
-  width: 8px; height: 8px; flex: 0 0 8px; margin: 0 4px 4px 0;
-  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-  border-radius: 1px; transform: rotate(45deg); transition: transform .18s ease;
-}
-[data-page=single] main details[open] > summary:not(.aligned-disclosure)::after,
-details[open] > summary > .disclosure-chevron { transform: translateY(4px) rotate(225deg); }
 [data-page=single] main .button { min-height: 44px; border-radius: 11px; }
 [data-page=single] main :is(button,summary,a,select,input,svg):focus-visible { outline: 2px solid #738a2c; outline-offset: 3px; }
 [data-page=single] .analysis-chart :is(svg,summary):focus-visible { outline-color: #b6bcff; outline-offset: -2px; border-radius: 4px; }
@@ -125,4 +104,17 @@ details[open] > summary > .disclosure-chevron { transform: translateY(4px) rotat
 }
 @media (prefers-reduced-motion: reduce) {
   [data-page=single] main details > summary::after, .disclosure-chevron { transition: none; }
+}
+
+[data-page=single] .forecast-page-heading { min-height: 0; padding: 12px 0; margin: 0 0 12px; align-items: center; }
+[data-page=single] .forecast-page-heading h1 { font-size: clamp(27px, 4vw, 44px); margin: 0; }
+[data-page=single] .forecast-page-heading .mode-switch { align-self: center; }
+[data-page=single] .analysis-extra { margin: 0; }
+[data-page=single] #load-status { margin: 0; }
+[data-page=single] #load-status:empty { display: none; }
+[data-page=single] .models-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 700px) {
+  [data-page=single] .forecast-page-heading { align-items: flex-start; }
+  [data-page=single] .forecast-page-heading .mode-switch { align-self: flex-start; }
+  [data-page=single] .models-strip { grid-template-columns: minmax(0, 1fr); }
 }

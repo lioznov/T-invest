@@ -27,7 +27,12 @@ def _helper_evidence(ticker, bucket):
 
 
 def page(request, watchlist=False):
-    return render(request,"signals.html",{"watchlist":watchlist,"has_token":bool(os.getenv("INVEST_TOKEN"))})
+    from .morning_model import TICKERS
+    return render(request, "signals.html", {
+        "watchlist": watchlist,
+        "has_token": bool(os.getenv("INVEST_TOKEN")),
+        "forecast_tickers": TICKERS,
+    })
 
 
 @require_GET

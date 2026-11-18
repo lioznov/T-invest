@@ -1,23 +1,17 @@
 <section class="panel morning-panel" id="morning-forecast" aria-labelledby="morning-heading">
   <div class="section-heading morning-heading">
-    <div><p class="eyebrow">ОТДЕЛЬНАЯ МОДЕЛЬ · С ВЕЧЕРА НА УТРО</p><h2 id="morning-heading">Какой может быть цена утром?</h2></div>
+    <h2 id="morning-heading">Сохранённые расчёты</h2>
     <span class="badge" id="morning-badge">Исследование</span>
   </div>
-  <p class="muted">По завершённым свечам до 17:45 МСК модель оценивает цену в 10:00 МСК следующего дня. Это отдельный эксперимент, не торговая команда и не обещание прибыли.</p>
   <form id="morning-form" class="morning-form">
-    <label for="morning-ticker">Отдельный тикер для прогноза<input id="morning-ticker" name="ticker" value="SBER" placeholder="Например, SBER" maxlength="15" autocomplete="off" required></label>
-    <button id="morning-refresh" type="submit" class="button primary">Посмотреть прогноз</button>
+    <label for="morning-ticker">Акция<input id="morning-ticker" name="ticker" value="SBER" placeholder="Например, SBER" maxlength="15" autocomplete="off" required></label>
+    <button id="morning-refresh" type="submit" class="button primary">Посмотреть архив</button>
   </form>
-  <p class="muted small">Последний ручной расчёт сохраняется для одной выбранной акции. Для другого тикера нужен отдельный новый расчёт командой ниже; смена поля сама по себе не создаёт прогноз.</p>
-  <p id="morning-status" class="morning-status" role="status">Читаем сохранённый прогноз. Обучение не запускается при открытии страницы.</p>
+  <p id="morning-status" class="morning-status" role="status">Читаем архив…</p>
   <div id="morning-result" aria-live="polite"></div>
-  <div class="morning-rules" aria-label="Время расчёта">
-    <div><span>Что известно модели</span><strong>До 17:45 МСК</strong></div>
-    <div><span>Условная покупка в тесте</span><strong>18:00 МСК</strong></div>
-    <div><span>Что прогнозируем</span><strong>Следующий день · 10:00 МСК</strong></div>
-  </div>
-  <p class="muted small">Входные дни — понедельник–четверг. Пятница и выходные не прогнозируются. Цена в тесте берётся после расчёта, а не задним числом по уже известному закрытию. Падение — повод не открывать новую покупку, а не предложение шорта.</p>
-  <details class="morning-evidence"><summary>Результаты проверки на новых для модели датах</summary><div id="morning-report" class="morning-report"><p class="muted">Результаты ещё не загружены.</p></div></details>
-  <details class="morning-help"><summary>Как обучить модель и получить новый прогноз?</summary><p class="muted small">Сначала в отдельном терминале из папки с manage.py обучи модель на сохранённой истории. Команда создаст модель и отчёт; это не проверка новой торговой даты.</p><code>python manage.py train_morning_forecast</code><p class="muted small">Затем для отдельного нового прогноза запроси свежие свечи. Замени SBER своим тикером. Команда только читает данные и сохраняет прогноз; не покупает акции. Запускай её в окне 17:45–18:00 МСК в понедельник–четверг: нужны завершённые данные до 17:45, до условного входа в 18:00. Вне этого окна нового вечернего прогноза нет.</p><code>python manage.py forecast_morning --ticker SBER --fetch</code><p class="muted small">После расчёта нажми «Посмотреть прогноз». Открытие панели само по себе не обучает модель, не запрашивает биржевую историю и не запускает эти команды.</p></details>
-  <p class="muted small morning-disclaimer">Модель не выставляет заявки и не отправляет сигналы в Telegram. Точная цена заранее неизвестна: новости и ночные события могут изменить рынок. Доходность этой модели не считается доказанной по одному удачному прогнозу.</p>
+  <details class="morning-evidence"><summary>Как модель прошла проверку</summary><div id="morning-report" class="morning-report"><p class="muted">Результаты ещё не загружены.</p></div></details>
+  <details class="morning-help"><summary>Какие цены использует модель</summary>
+    <p class="muted small">Модель берёт 15-минутные свечи, закрытые к 17:45 МСК, и статистику предыдущих сессий. Она оценивает цену открытия свечи в 10:00 МСК ближайшего подтверждённого торгового утра. Модель проверяли для прогноза на одну ночь, с понедельника по четверг.</p>
+    {% if watchlist %}<p><a href="/?mode=live">Выбрать акцию и рассчитать прогноз ↗</a></p>{% endif %}
+  </details>
 </section>

@@ -2,6 +2,7 @@
   'use strict';
   const api=factory();
   if(typeof module==='object' && module.exports)module.exports=api;
+  root.VorbyMorningForecast=api;
   if(root.document)api.mount(root.document,root);
 })(typeof window==='undefined'?globalThis:window,function(){
   'use strict';
@@ -36,20 +37,6 @@
       || now>=Date.parse(f.as_of)+15*60*1000;
     return {state:historical?'historical':'ok',forecast:f};
   }
-  function overviewState(value,selection,quote,now=Date.now()){
-    if(!selection || selection.mode==='demo')return {state:'demo'};
-    if(value?.status==='loading' && value.ticker===selection.ticker)return {state:'loading'};
-    if(value?.ticker!==selection.ticker || value.entry_allowed!==false)return {state:'unavailable'};
-    const {state,forecast}=forecastState(value,now);
-    if(state!=='ok')return {state};
-    const result={state,forecast};
-    if(quote?.ticker===selection.ticker && quote.mode===selection.mode && positive(quote.price)){
-      result.delta=forecast.predicted_price-quote.price;
-      const percentChange=result.delta/quote.price*100;
-      if(finite(percentChange))result.percentChange=percentChange;
-    }
-    return result;
-  }
   function mount(document,env){
     const form=document.getElementById('morning-form');
     if(!form)return null;
@@ -58,49 +45,48 @@
     const status=byId('morning-status'),result=byId('morning-result'),report=byId('morning-report');
     let sequence=0,controller=null,expiryTimer=null;
     const overview=byId('forecast-overview');
-    let selection=null,quote=null,overviewValue=null,overviewExpiry=null;
-    function renderOverview(){
-      if(overviewExpiry!==null)env.clearTimeout(overviewExpiry);
-      overviewExpiry=null;
-      const {state,forecast,delta,percentChange}=overviewState(overviewValue,selection,quote);
-      const ready=state==='ok';
-      overview.dataset.state=state;
-      overview.setAttribute('aria-busy',String(state==='loading'));
-      byId('forecast-overview-price').textContent=ready?price(forecast.predicted_price):
-        state==='loading'?'Загружаем прогноз…':'Прогноз на завтра пока недоступен';
-      const explanations={
-        demo:'В учебном режиме доступны только примеры котировок.',
-        historical:'Сохранённый расчёт доступен в архиве. Для нового прогноза нужен свежий вечерний расчёт.',
-        unavailable:overviewValue?.message || 'Для выбранной акции пока нет свежего сохранённого расчёта.',
-      };
-      byId('forecast-overview-detail').textContent=ready
-        ? `Расчётная оценка на ${date(forecast.target_at)}. Данные модели на ${date(forecast.as_of)}.`
-        : explanations[state] || 'Проверяем сохранённый расчёт для выбранной акции.';
-      const difference=byId('forecast-overview-change');
-      difference.hidden=!ready || !finite(delta);
-      difference.textContent=difference.hidden?'':`К последней доступной цене ${delta>0?'+':''}${number(delta,Math.abs(delta)<.01 && delta!==0?6:2)} ₽${finite(percentChange)?' ('+percent(percentChange)+')':''}`;
-      const range=byId('forecast-overview-range');
-      range.hidden=!ready || !positive(forecast.lower_price) || !positive(forecast.upper_price) ||
-        forecast.lower_price>forecast.predicted_price || forecast.upper_price<forecast.predicted_price;
-      range.textContent=range.hidden?'':`Диапазон оценки ${price(forecast.lower_price)} – ${price(forecast.upper_price)}. Его ширина основана на прошлых ошибках модели.`;
-      const direction=byId('forecast-overview-direction');
-      direction.hidden=!ready;
-      const directions={up:'Возможен рост',down:'Возможно снижение',uncertain:'Направление неопределённо'};
-      direction.textContent=ready?`${directions[forecast.direction] || directions.uncertain} относительно цены на ${date(forecast.as_of)} (${price(forecast.anchor_price)}).`:'';
-      if(ready){
-        const expires=Math.min(Date.parse(forecast.target_at),Date.parse(forecast.as_of)+900000);
-        overviewExpiry=env.setTimeout(renderOverview,Math.max(1,expires-Date.now()));
-      }
-    }
     function clearExpiry(){if(expiryTimer!==null){env.clearTimeout(expiryTimer);expiryTimer=null;}}
     function node(tag,text,className){const item=document.createElement(tag);if(text!==undefined)item.textContent=text;if(className)item.className=className;return item;}
     function paragraph(parent,text,className='muted small'){parent.append(node('p',text,className));}
     function metric(parent,label,value,note){const card=node('div',undefined,'morning-metric');card.append(node('span',label),node('strong',value));if(note)card.append(node('small',note));parent.append(card);}
     function item(parent,label,value){const line=node('div');line.append(node('dt',label),node('dd',value));parent.append(line);}
-    function renderReport(value,rules){
+    function renderReport(value,rules,replay){
       report.replaceChildren();
-      if(!value || typeof value!=='object'){paragraph(report,'Сохранённого отчёта нет. Нельзя оценить качество или доходность модели.');return;}
-      paragraph(report,`Обучение: ${finite(value.trained_rows)?number(value.trained_rows,0):'—'} примеров. Калибровка диапазона: ${finite(value.calibration_rows)?number(value.calibration_rows,0):'—'} примеров.`);
+      const hasReplay=Boolean(replay?.periods);
+      if(hasReplay){
+        const summary=node('section',undefined,'morning-replay');
+        summary.append(node('h3','Как модель сработала на более поздних датах'));
+        const cards=node('div',undefined,'morning-periods');
+        const moneyError=value=>finite(value)&&value>=0?`${number(value)} ₽`:'—';
+        const ratioError=value=>finite(value)&&value>=0?`${number(value)}%`:'—';
+        for(const [key,label] of [['test','Первая проверка'],['later','Следующий период']]){
+          const period=replay.periods[key];
+          if(!period || !positive(period.samples))continue;
+          const card=node('section',undefined,'morning-period');
+          const list=node('dl');
+          item(list,'Период',`${date(period.first_target_at).split(',')[0]} — ${date(period.last_target_at).split(',')[0]}`);
+          item(list,'Проверено прогнозов',number(period.samples,0));
+          item(list,'Средняя абсолютная ошибка',`${moneyError(period.mae_rub)} · ${ratioError(period.mae_pct)}`);
+          item(list,'Ошибка прогноза «цена не изменится»',`${moneyError(period.baseline_mae_rub)} · ${ratioError(period.baseline_mae_pct)}`);
+          card.append(node('h3',label),list);
+          const ex=period.example;
+          if(ex && ticker(ex.ticker) && positive(ex.predicted_price) && positive(ex.actual_price)){
+            paragraph(card,`${ex.ticker} · ${date(ex.target_at)}. Расчёт ${price(ex.predicted_price)}, факт ${price(ex.actual_price)}, ошибка ${moneyError(ex.error_rub)} (${ratioError(ex.error_pct)}).`);
+          }
+          cards.append(card);
+        }
+        summary.append(cards);
+        paragraph(summary,'В проверке использованы сохранённые биржевые свечи. Даты проверки идут после обучения. Процентная ошибка измеряется относительно фактической цены открытия. Эти даты уже изучались в проекте.');
+        report.append(summary);
+      }
+      if(!value || typeof value!=='object'){
+        if(!hasReplay)paragraph(report,'Отчёт о качестве модели недоступен.');
+        return;
+      }
+      const details=node('details',undefined,'morning-evidence');
+      details.append(node('summary','Подробные метрики и условные сделки'));
+      report.append(details);
+      paragraph(details,`Обучение: ${finite(value.trained_rows)?number(value.trained_rows,0):'—'} примеров. Калибровка диапазона: ${finite(value.calibration_rows)?number(value.calibration_rows,0):'—'} примеров.`);
       const periods=node('div',undefined,'morning-periods');
       for(const [key,label] of [['test','Первая проверка после обучения'],['later','Более поздний период']]){
         const period=value.periods?.[key],card=node('section',undefined,'morning-period');card.append(node('h3',label));
@@ -143,27 +129,27 @@
         if(typeof period.note==='string')paragraph(card,period.note);
         periods.append(card);
       }
-      report.append(periods);
-      paragraph(report,'Ошибка сравнивается с простым прогнозом «утром цена останется прежней». Точность направления считается по точечной оценке; сама модель выбирает направление только если весь диапазон выше или ниже исходной цены. Угаданное направление не означает прибыль после комиссии и проскальзывания. Диапазон с ориентиром 80% — общая историческая калибровка, не 80% вероятности заработать на этой акции.');
+      details.append(periods);
+      paragraph(details,'Ошибка сравнивается с простым прогнозом «утром цена останется прежней». Точность направления считается по точечной оценке; сама модель выбирает направление только если весь диапазон выше или ниже исходной цены. Угаданное направление не означает прибыль после комиссии и проскальзывания. Диапазон с ориентиром 80% — общая историческая калибровка, не 80% вероятности заработать на этой акции.');
       if(rules && positive(rules.paper_threshold_pct) && positive(rules.paper_capital) && positive(rules.max_stock_allocation)
         && finite(rules.fee_bps_side) && finite(rules.slippage_bps_side)
         && typeof rules.cutoff==='string' && typeof rules.entry==='string' && typeof rules.target==='string'
         && typeof rules.paper_sizing==='string' && rules.paper_sizing.includes('whole lots')){
-        paragraph(report,`Условные сделки проверялись по отдельному правилу: покупка, когда точечный прогноз роста от цены на ${rules.cutoff} выше ${percent(rules.paper_threshold_pct)}. Вход — ${rules.entry}, выход — ${rules.target}. Начальный капитал — ${price(rules.paper_capital)}, до ${number(rules.max_stock_allocation*100,0)}% в одной акции, только целые лоты. С каждой стороны учтены комиссия ${number(rules.fee_bps_side/100)}% и проскальзывание ${number(rules.slippage_bps_side/100)}%; стресс-проверка удваивает оба расхода. Это не выбор направления по всему диапазону: он может оставаться неопределённым, даже когда точечный прогноз создаёт условную сделку.`);
+        paragraph(details,`Условные сделки проверялись по отдельному правилу: покупка, когда точечный прогноз роста от цены на ${rules.cutoff} выше ${percent(rules.paper_threshold_pct)}. Вход — ${rules.entry}, выход — ${rules.target}. Начальный капитал — ${price(rules.paper_capital)}, до ${number(rules.max_stock_allocation*100,0)}% в одной акции, только целые лоты. С каждой стороны учтены комиссия ${number(rules.fee_bps_side/100)}% и проскальзывание ${number(rules.slippage_bps_side/100)}%; стресс-проверка удваивает оба расхода. Это не выбор направления по всему диапазону: он может оставаться неопределённым, даже когда точечный прогноз создаёт условную сделку.`);
       }
-      if(typeof value.note==='string')paragraph(report,value.note);
+      if(typeof value.note==='string')paragraph(details,value.note);
     }
     function render(value,now=Date.now()){
       clearExpiry();
-      const model=forecastState(value,now);result.replaceChildren();renderReport(value?.report,value?.rules);
+      const model=forecastState(value,now);result.replaceChildren();renderReport(value?.report,value?.rules,value?.replay);
       const labels={ok:'Эксперимент · не сигнал',historical:'Архивный прогноз',demo:'Учебный режим',loading:'Расчёт ещё не готов',unavailable:'Нет доступного прогноза'};
       badge.textContent=labels[model.state];status.dataset.state=model.state;
       const messages={
-        ok:'Исследовательский прогноз. Автоматическая покупка и продажа запрещены: качество модели ещё нужно подтверждать на новых днях.',
+        ok:'Сохранённая оценка модели.',
         historical:'Это архивный прогноз, не текущий сигнал покупки. Вечернее окно до 18:00 МСК уже закрыто либо сохранённые данные не относятся к текущему вечеру.',
         demo:'Учебный режим: реального прогноза на утро нет. Вымышленные цены и сигналы не показываются. Для чтения реальной сохранённой модели выбери «Рынок».',
-        loading:'Прогноз ещё не готов. Нажми «Посмотреть прогноз» позже; старые цены не выдаются за новый расчёт.',
-        unavailable:'Сохранённый прогноз недоступен или неполон. Это не означает, что цена не изменится. Проверь историю и обучение отдельной модели.'
+        loading:'Читаем архив…',
+        unavailable:'Сохранённый расчёт недоступен.'
       };
       status.textContent=messages[model.state];
       if(typeof value?.message==='string')paragraph(result,value.message);
@@ -205,32 +191,21 @@
       try{
         const response=await env.fetch(`/api/morning-forecast/?ticker=${encodeURIComponent(symbol)}&mode=${mode}`,{cache:'no-store',signal:active.signal});
         const value=await response.json();if(current!==sequence)return;
-        if(!response.ok)publish({status:'unavailable',ticker:symbol,message:typeof value?.message==='string'?value.message:undefined},symbol,mode);
-        else publish(value,symbol,mode);
-      }catch{if(current===sequence)publish({status:'unavailable',ticker:symbol,message:'Не удалось получить ответ сервера. Текущий прогноз не подтверждён.'},symbol,mode);}
+        if(!response.ok)render({status:'unavailable',ticker:symbol,message:typeof value?.message==='string'?value.message:undefined});
+        else render(value);
+      }catch{if(current===sequence)render({status:'unavailable',ticker:symbol,message:'Не удалось получить ответ сервера. Попробуй обновить архив.'});}
       finally{env.clearTimeout(timer);if(current===sequence)button.disabled=false;}
-    }
-    function publish(value,symbol,mode){
-      render(value);
-      if(overview && selection?.ticker===symbol && selection.mode===mode){
-        overviewValue=value;
-        renderOverview();
-      }
     }
     const selected=new URLSearchParams(env.location.search).get('ticker')?.toUpperCase();if(ticker(selected))field.value=selected;
     form.addEventListener('submit',event=>{event.preventDefault();load();});
     if(overview){
+      let currentSelection;
       document.addEventListener('vorby:analysis-selection',event=>{
-        selection=event.detail;
-        quote=null;
-        field.value=selection.ticker;
-        overviewValue={status:'loading',ticker:selection.ticker};
-        renderOverview();
+        const next=event.detail;
+        if(currentSelection?.ticker===next.ticker && currentSelection.mode===next.mode)return;
+        currentSelection=next;
+        field.value=next.ticker;
         load();
-      });
-      document.addEventListener('vorby:analysis-quote',event=>{
-        quote=event.detail;
-        if(overviewValue?.status==='ok')renderOverview();
       });
     }else{
       document.querySelectorAll('[data-mode]').forEach(element=>element.addEventListener('click',load));
@@ -238,5 +213,5 @@
     }
     return {render,load};
   }
-  return {forecastState,overviewState,mount,price,percent,date,periodDateRange};
+  return {forecastState,mount,price,percent,date,periodDateRange};
 });

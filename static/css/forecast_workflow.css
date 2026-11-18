@@ -1,0 +1,42 @@
+.forecast-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.analysis-forecast[data-state="error"] #forecast-job-status {
+  color: #ffcfb8;
+}
+
+.analysis-forecast[data-state="ok"] #forecast-job-status:empty {
+  display: none;
+}
+
+.forecast-job-actions .forecast-compare {
+  border: 1px solid #c9d09d;
+  background: transparent;
+  color: #ecf0ce;
+}
+
+.forecast-job-actions .forecast-compare:hover,
+.forecast-job-actions .forecast-compare:focus-visible {
+  background: #474c3e;
+  color: #fff;
+}
+
+.forecast-job-actions .button:focus-visible {
+  outline: 2px solid #e2f18e;
+}
+
+.analysis-forecast [hidden],
+.analysis-quote [hidden] {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .forecast-job-actions .button {
+    width: 100%;
+    white-space: normal;
+  }
+}

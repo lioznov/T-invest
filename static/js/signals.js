@@ -63,12 +63,23 @@
     if(!node)return;
     try {
       const h=await request('/api/monitor-health/',5000);
-      const labels={not_started:'Не запущен',starting:'Запуск',connecting:'Подключение',collecting:'Сбор данных',reconnecting:'Переподключение',stale:'Нет свежего подтверждения работы',deadline:'Завершён по времени',interrupted:'Остановлен',disk_limit:'Остановлен: лимит архива',retries_exhausted:'Остановлен: связь не восстановилась',subscription_rejected:'Подписка отклонена',archive_error:'Ошибка записи',unavailable:'Статус недоступен'};
       const pulse=Date.parse(h.heartbeat_at),fresh=Number.isFinite(pulse) && Date.now()-pulse>=0 && Date.now()-pulse<=20000;
       const active=h.alive===true && fresh;
-      node.textContent=`${active?'Работает':'Сейчас не работает'} · ${labels[h.status] || 'Статус неизвестен'}${Array.isArray(h.tickers)?` · ${h.tickers.join(', ')}`:''}. Стаканов: ${num(h.books,0)}, сделок: ${num(h.trades,0)}, закрытых свечей: ${num(h.candles,0)}. ${h.last_message_at?`Последнее сообщение: ${time(h.last_message_at)}.`:''} Анализ без браузера: ${active && h.signal_worker_running===true?'процесс запущен':'не подтверждён'}. Границы подключений могут содержать пропуски; наличие процесса не подтверждает свежий сигнал.`;
+      const stopped={
+        not_started:'Сборщик ещё не запускался.',deadline:'Время сбора закончилось.',
+        disk_limit:'Достигнут лимит места для записей.',retries_exhausted:'Не удалось восстановить связь с биржей.',
+        stale:'Сборщик перестал присылать статус.',archive_error:'Не удалось сохранить записи.',
+      };
+      node.dataset.monitorState=active?(h.status==='collecting'?'active':'connecting'):'inactive';
+      node.textContent=active
+        ? h.status==='collecting'?'Сборщик запущен и принимает данные.':'Сборщик запущен, подключаемся к бирже…'
+        : `Сейчас сбор не подтверждён. ${stopped[h.status] || ''}`.trim();
+      const detail=$('monitor-detail');
+      if(detail)detail.textContent=`Снимков заявок: ${num(h.books,0)}. Сделок: ${num(h.trades,0)}. Закрытых свечей: ${num(h.candles,0)}.${h.last_message_at?` Последняя запись: ${time(h.last_message_at)}.`:''} ${active && h.signal_worker_running===true?'Сборщик подтверждает запуск отдельного процесса анализа.':'Статус отдельного анализа по этим данным не подтверждён.'}`;
     } catch {
-      node.textContent='Статус фонового сбора недоступен. Работа сборщика не подтверждена; сигналы сайта оцениваются отдельно.';
+      node.dataset.monitorState='inactive';
+      node.textContent='Не удалось проверить, работает ли сборщик.';
+      if($('monitor-detail'))$('monitor-detail').textContent='';
     }
   }
   monitorHealth();
@@ -77,8 +88,8 @@
     document.querySelectorAll('[data-mode]').forEach(button=>button.classList.toggle('selected',button.dataset.mode===mode));
     $('mode-banner').classList.toggle('demo',mode==='demo');
     $('mode-banner').textContent=mode==='demo'
-      ? 'Учебный режим · Цены вымышлены. Это пример работы сайта, не торговый сигнал.'
-      : 'Т-Банк · Реальные котировки. Сигналы экспериментальные, их прибыльность пока не подтверждена.';
+      ? 'Учебный режим · График показывает пример на вымышленных ценах.'
+      : watch?'Т-Банк · Рыночные котировки.':'';
   }
   function aiState(value) {
     if(value?.status==='ok' && (!value.valid_until || !Number.isFinite(Date.parse(value.valid_until)) || Date.now()>Date.parse(value.valid_until)))return {...value,status:'waiting',decision:'WAIT',score:null,plan:null,drivers:[],message:'Оценка ИИ устарела. Ждём новую свечу и котировки.'};
@@ -700,17 +711,29 @@
       $('research-form').querySelector('button').disabled=false;
       $('research-result').textContent='Источник данных изменён. Запусти историческую проверку.';
     });
+    const forecastTickers=new Set(document.body.dataset.forecastTickers?.split(' ') || []);
+    function selectStock(value){
+      ticker=value;
+      save('vorby.symbol',ticker);
+      history.replaceState(null,'',`/?ticker=${encodeURIComponent(ticker)}&mode=${mode}`);
+      restart();
+    }
     InstrumentSearch.attach({
       input:$('symbol'),dropdown:$('symbol-suggestions'),sharesOnly:true,
-      onSelect:item=>{$('symbol').value=item.ticker;$('load-status').textContent=`Выбрана ${item.ticker} — ${item.name}. Нажми «Анализировать».`;}
+      onSelect:item=>selectStock(item.ticker)
     });
     $('symbol-form').addEventListener('submit',async event=>{
       event.preventDefault();const value=$('symbol').value.trim().toUpperCase();
       if(!validTicker(value)) {$('load-status').textContent='Введи биржевой тикер латиницей, например SBER.';return;}
+      if(forecastTickers.has(value)){selectStock(value);return;}
+      const button=event.submitter || $('symbol-form').querySelector('button[type="submit"]');
+      button.disabled=true;
+      $('load-status').textContent='Проверяем тикер…';
       try {
         if(!await InstrumentSearch.exact(value)) {$('load-status').textContent=`Акция ${value} не найдена. Выбери её из подсказок.`;return;}
       } catch {$('load-status').textContent='Не удалось проверить тикер. Попробуй ещё раз, когда поиск заработает.';return;}
-      ticker=value;save('vorby.symbol',ticker);history.replaceState(null,'',`/?ticker=${ticker}&mode=${mode}`);restart();
+      finally{button.disabled=false;}
+      if($('symbol').value.trim().toUpperCase()===value)selectStock(value);
     });
     $('research-form').addEventListener('submit',async event=>{
       event.preventDefault();const revision=++researchGeneration,button=event.submitter || document.querySelector('#research-form button');
@@ -736,8 +759,11 @@
         if(chartSnapshot){const c=chartSnapshot;drawChart(c.data,c.markers,c.ranges,c.structure,c.technical);}
       });
     };
-    if(typeof ResizeObserver==='function')new ResizeObserver(redraw).observe($('price-chart').parentElement);
-    else window.addEventListener('resize',redraw);
+    if(typeof ResizeObserver==='function'){
+      const observer=new ResizeObserver(redraw);
+      observer.observe($('price-chart').parentElement);
+      observer.observe($('volume-chart').parentElement);
+    }else window.addEventListener('resize',redraw);
   }
   setInterval(()=>{if(!watch && mode==='live' && !document.hidden)loadForward(generation);},60000);
   // Clear actionable prices even if a slow request or a disconnected server delays polling.

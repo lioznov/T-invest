@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/notifications/', notification_views.settings, name='notification_settings'),
     path('api/ai-model/', signal_views.ai_model, name='ai_model'),
     path('api/morning-forecast/', morning_views.forecast, name='morning_forecast'),
+    path('api/morning-forecast/job/', morning_views.forecast_job, name='morning_forecast_job'),
     path('api/close-timing/', close_timing_views.report, name='close_timing'),
     path('api/multiyear-research/', multiyear_views.report, name='multiyear_research'),
     path('api/temporal-validation/', temporal_validation_views.report, name='temporal_validation'),
