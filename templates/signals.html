@@ -17,20 +17,22 @@
   <link rel="stylesheet" href="{% static 'css/temporal_validation.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/trading_helper.css' %}?v=1">
   {% include "_theme_head.html" %}
+  {% if not watchlist %}<link rel="stylesheet" href="{% static 'css/stock_analysis.css' %}?v=2">{% endif %}
   <script src="{% static 'js/instrument_search.js' %}?v=1" defer></script>
   <script src="{% static 'js/market_structure.js' %}?v=1" defer></script>
   <script src="{% static 'js/technical_chart.js' %}?v=1" defer></script>
   <script src="{% static 'js/neural_trader.js' %}?v=1" defer></script>
-  <script src="{% static 'js/chart_ui.js' %}?v=1" defer></script>
+  <script src="{% static 'js/chart_ui.js' %}?v=2" defer></script>
   <script src="{% static 'js/trading_helper.js' %}?v=1" defer></script>
   <script src="{% static 'js/risk_ui.js' %}?v=1" defer></script>
-  <script src="{% static 'js/signals.js' %}?v=35" defer></script>
+  {% if not watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=2" defer></script>{% endif %}
+  <script src="{% static 'js/signals.js' %}?v=36" defer></script>
   <script src="{% static 'js/news.js' %}?v=2" defer></script>
-  <script src="{% static 'js/morning_forecast.js' %}?v=1" defer></script>
+  {% if watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=2" defer></script>{% endif %}
   <script src="{% static 'js/close_timing.js' %}?v=2" defer></script>
   <script src="{% static 'js/multiyear_research.js' %}?v=2" defer></script>
   <script src="{% static 'js/temporal_validation.js' %}?v=1" defer></script>
-  <script src="{% static 'js/workspace_focus.js' %}?v=2" defer></script>
+  <script src="{% static 'js/workspace_focus.js' %}?v=3" defer></script>
 </head>
 <body class="focus-workspace" data-page="{% if watchlist %}watchlist{% else %}single{% endif %}" data-token="{{ has_token|yesno:'true,false' }}">
   {% if watchlist %}{% include "_app_sidebar.html" with active_page="watchlist" %}{% else %}{% include "_app_sidebar.html" with active_page="single" %}{% endif %}
@@ -58,15 +60,32 @@
       {% include "_notifications.html" with notification_mode="analysis-multi" %}
       <div class="section-heading"><h2>Список наблюдения</h2><span class="muted">Нажми на акцию для подробного разбора</span></div>
       <div id="watch-grid" class="watch-grid" aria-live="polite"></div>
-{% else %}      <section class="metrics-row"><div class="panel metric"><span>Активные покупки <i title="Доля объёма сделок, инициированных покупателями, за 5 минут">i</i></span><strong id="buy-share">—</strong><small>От объёма направленных сделок</small></div><div class="panel metric"><span>Объём к обычному</span><strong id="rvol">—</strong><small>Закрытая свеча / среднее 20 свечей</small></div><div class="panel metric"><span>Средняя цена дня</span><strong id="vwap">—</strong><small>VWAP по минутным свечам, МСК</small></div><div class="panel metric"><span>Разница покупки и продажи</span><strong id="spread">—</strong><small>Спред · условие ≤ 0,10%</small></div></section>
-      <section class="overview-grid">
-        <div class="panel chart-panel">
-          <div class="chart-heading"><div class="instrument-name"><span id="ticker-avatar" class="ticker-avatar">S</span><div><h2 id="instrument-name">Сбербанк</h2><span id="ticker-label" class="muted">SBER · Основная сессия</span></div></div><div class="price-block"><strong id="price">—</strong><span id="price-change" class="muted">Данные загружаются</span></div></div>
-          <div class="chart-controls"><div><span class="timeframe">15 мин</span><span class="muted">Последние 90 свечей</span></div><div class="legend"><span class="legend-price">Цена</span><span class="legend-ema">Тренд · EMA 50</span><span class="legend-vwap">Средняя · VWAP</span></div></div>
-          <details class="chart-options"><summary>Линии и уровни на графике</summary><div class="structure-layers" role="group" aria-label="Слои разметки графика"><label><input type="checkbox" data-structure-layer="levels" checked>Поддержка / сопротивление</label><label><input type="checkbox" data-structure-layer="trends" checked>Линии тренда</label><label><input type="checkbox" data-structure-layer="pivots" checked>Максимумы / минимумы</label><label><input type="checkbox" data-structure-layer="events" checked>Пробои / отскоки</label><label class="technical-channel-key"><input type="checkbox" data-structure-layer="channels" checked>Коридоры 20 / 60</label><label class="technical-book-key"><input type="checkbox" data-structure-layer="book" checked>Заявки возле уровней</label></div></details>
-          <div class="chart-wrap"><svg id="price-chart" role="img" aria-label="Цена, EMA50, VWAP, максимумы и минимумы, уровни поддержки и сопротивления, ценовые коридоры и зоны заявок стакана" viewBox="0 0 800 310"></svg><div id="chart-empty" class="chart-empty">Здесь появится график акции</div></div>
-          <div class="chart-footer"><span><span class="tiny-dot"></span> Закрытые свечи</span><span id="chart-period">—</span></div>
+{% else %}
+      {% include "_stock_analysis_result.html" %}
+      <section class="panel analysis-chart chart-panel" aria-labelledby="price-chart-heading">
+        <div class="analysis-chart-heading">
+          <h2 id="price-chart-heading">Как менялась цена</h2>
+          <p>Свечи показывают цены за 15 минут. Линии помогают увидеть тренд и среднюю цену с учётом объёма.</p>
         </div>
+        <ul class="analysis-legend" aria-label="Обозначения цены">
+          <li class="legend-up">Рост или без изменений</li><li class="legend-down">Снижение</li>
+          <li class="legend-trend">Тренд (EMA 50)</li><li class="legend-average">Средняя с начала дня (VWAP)</li>
+        </ul>
+        <div class="chart-wrap"><svg id="price-chart" role="img" tabindex="0" aria-label="Свечи цены в рублях. Используй клавиши со стрелками для просмотра свечей." viewBox="0 0 800 360"></svg><div id="chart-empty" class="chart-empty">Здесь появится график акции</div></div>
+        <p id="price-chart-reading" class="analysis-chart-reading">Наведи курсор или коснись свечи, чтобы увидеть цены.</p>
+        <details class="chart-options"><summary>Линии и уровни на графике</summary><div class="structure-layers" role="group" aria-label="Слои разметки графика"><label><input type="checkbox" data-structure-layer="levels">Поддержка / сопротивление</label><label><input type="checkbox" data-structure-layer="trends">Линии тренда</label><label><input type="checkbox" data-structure-layer="pivots">Максимумы / минимумы</label><label><input type="checkbox" data-structure-layer="events">Пробои / отскоки</label><label class="technical-channel-key"><input type="checkbox" data-structure-layer="channels">Коридоры 20 / 60</label><label class="technical-book-key"><input type="checkbox" data-structure-layer="book">Заявки возле уровней</label><label><input type="checkbox" data-structure-layer="patterns">Фигуры на графике</label></div></details>
+        <div class="chart-footer"><span>Закрытые свечи · 15 минут</span><span id="chart-period">—</span></div>
+      </section>
+      <section class="panel analysis-chart volume-panel" aria-labelledby="volume-chart-heading">
+        <div class="analysis-chart-heading">
+          <h2 id="volume-chart-heading">Объём торгов</h2>
+          <p>Каждый столбец показывает, сколько лотов прошло за тот же 15-минутный интервал.</p>
+        </div>
+        <div class="chart-wrap"><svg id="volume-chart" role="img" tabindex="0" aria-label="Объём торгов в лотах. Используй клавиши со стрелками для просмотра столбцов." viewBox="0 0 800 210"></svg><div id="volume-empty" class="chart-empty">Здесь появится объём торгов</div></div>
+        <p id="volume-chart-reading" class="analysis-chart-reading">Наведи курсор или коснись столбца, чтобы увидеть объём.</p>
+      </section>
+      <section class="analysis-detail-grid" aria-label="Подробные показатели">
+      <section class="metrics-row"><div class="panel metric"><span>Активные покупки <i title="Доля объёма сделок, инициированных покупателями, за 5 минут">i</i></span><strong id="buy-share">—</strong><small>От объёма направленных сделок</small></div><div class="panel metric"><span>Объём к среднему</span><strong id="rvol">—</strong><small>Закрытая свеча / среднее 20 свечей</small></div><div class="panel metric"><span>Средняя цена дня</span><strong id="vwap">—</strong><small>VWAP по минутным свечам, МСК</small></div><div class="panel metric"><span>Разница покупки и продажи</span><strong id="spread">—</strong><small>Спред · условие ≤ 0,10%</small></div></section>
         <div id="signal-panel" class="panel signal-panel"><p class="eyebrow">СЕЙЧАС ПО АКЦИИ</p><div class="signal-title"><span id="decision" class="decision">Ожидание</span><span id="score" class="score">—<small>/100</small></span></div><p id="decision-text" class="muted">Собираем данные для шести условий.</p><div class="score-track"><span id="score-fill"></span></div><div class="score-description"><span id="passed">0 из 6 условий покупки</span><span>Баллы покупки, не вероятность</span></div><div id="blockers" class="blockers"></div><div class="next-step"><span>Что делать дальше</span><p id="next-step">Дождись загрузки котировок. Оценка появится автоматически.</p><a href="#focus-market" class="focus-text-link">Посмотреть причины <span aria-hidden="true">↗</span></a></div><div class="signal-bottom"><span class="muted">Последний снимок стакана</span><strong id="data-time">—</strong></div></div>
       </section>
 

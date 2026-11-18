@@ -39,7 +39,8 @@ class FocusWorkspaceTests(SimpleTestCase):
     def test_single_stock_keeps_every_primary_tool_in_its_intended_section(self):
         page = WorkspaceMarkup(render_to_string('signals.html', {'watchlist': False}))
         expected = {
-            'now': ['price-chart', 'decision', 'next-step', 'trade-plan', 'stock-news-items', 'research-helper'],
+            'now': ['forecast-overview', 'price', 'price-chart', 'volume-chart', 'decision',
+                    'next-step', 'trade-plan', 'stock-news-items', 'research-helper'],
             'market': ['rules', 'orderbook', 'technical-result', 'structure-status', 'pattern-items'],
             'research': ['ai-result', 'neural-result', 'morning-forecast', 'close-timing-research',
                          'multiyear-research', 'temporal-validation', 'research-form', 'paper-result', 'forward-result'],
@@ -49,6 +50,8 @@ class FocusWorkspaceTests(SimpleTestCase):
             for element in ids:
                 with self.subTest(element=element):self.assertEqual(page.owners.get(element), pane)
         self.assertFalse([name for name, count in Counter(page.ids).items() if count > 1])
+        ordered = ['forecast-overview', 'price-chart', 'volume-chart', 'buy-share', 'decision']
+        self.assertEqual(sorted(ordered, key=page.ids.index), ordered)
 
     def test_watchlist_is_the_default_view_and_does_not_receive_single_stock_forms(self):
         page = WorkspaceMarkup(render_to_string('signals.html', {'watchlist': True}))

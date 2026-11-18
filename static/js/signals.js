@@ -24,7 +24,29 @@
   let researchHistory=read('vorby.researchHistory','archive')==='current'?'current':'archive';
   const results=new Map();
   let currentAi=null,currentNeural=null,currentHelper=null;
-  let chartSnapshot=null,structureWasFresh=false,currentTechnical=null;
+  let chartSnapshot=null,structureWasFresh=false,currentTechnical=null,lastQuote=null;
+  const chartUI=window.VorbyChartUI;
+  const priceInspector=watch?null:chartUI.inspect($('price-chart'),$('price-chart-reading'),c=>
+    `${day(c.time)}, ${time(c.time)} · Открытие ${money(c.open)} · Максимум ${money(c.high)} · Минимум ${money(c.low)} · Закрытие ${money(c.close)}`);
+  const volumeInspector=watch?null:chartUI.inspect($('volume-chart'),$('volume-chart-reading'),c=>
+    `${day(c.time)}, ${time(c.time)} · ${num(c.volume,0)} лотов`);
+
+  function showQuote(quote){
+    lastQuote=quote;
+    $('price').textContent=quote?`${num(quote.price,quote.price<1?6:2)} ₽`:'—';
+    if(quote)updateQuoteTime();
+    document.dispatchEvent(new CustomEvent('vorby:analysis-quote',{detail:quote}));
+  }
+  function updateQuoteTime(){
+    if(!lastQuote)return;
+    const {at,source,refreshing}=lastQuote,stamp=Date.parse(at);
+    const age=Date.now()-stamp;
+    const stale=mode==='live' && Number.isFinite(age) && age>(source==='book'?45000:17*60000);
+    const origin=mode==='demo'?'Учебная котировка':source==='book'?'Середина цен покупки и продажи':'Закрытие 15-минутной свечи';
+    const timestamp=Number.isFinite(stamp)?`${day(at)}, ${time(at)}`:'Время цены недоступно';
+    const text=`${timestamp} · ${origin}${stale?' · Устарела':refreshing?' · Обновляем…':''}`;
+    if($('price-change').textContent!==text)$('price-change').textContent=text;
+  }
 
   async function request(url, timeoutMs=15000) {
     const controller=new AbortController();
@@ -136,10 +158,12 @@
     $('instrument-name').textContent=ticker;
     $('ticker-label').textContent=`${ticker} · TQBR`;
     $('ticker-avatar').textContent=ticker[0];
-    ['price','buy-share','rvol','vwap','spread','data-time'].forEach(id=>$(id).textContent='—');
+    ['buy-share','rvol','vwap','spread','data-time'].forEach(id=>$(id).textContent='—');
+    if(lastQuote && (lastQuote.ticker!==ticker || lastQuote.mode!==mode))showQuote(null);
+    if(lastQuote){lastQuote.refreshing=state==='loading';updateQuoteTime();}
     chartSnapshot=null;structureWasFresh=false;renderStructure(null);
     currentTechnical=null;$('technical-result').innerHTML=window.VorbyTechnical.panelMarkup(null);
-    $('price-change').textContent='Нет актуальной оценки';
+    if(!lastQuote)$('price-change').textContent=state==='loading'?'Загружаем котировку…':'Котировка недоступна';
     $('decision').textContent=state==='loading'?'Загружаем':state==='stale'?'Оценка устарела':'Нет данных'; $('decision').classList.remove('positive','negative');
     $('score').innerHTML='—<small>/100</small>'; $('score-fill').style.width='0';
     $('passed').textContent='Условия не оценены';
@@ -150,6 +174,8 @@
     $('range-levels').textContent='Уровни появятся после загрузки закрытых свечей.';
     $('chart-empty').textContent=state==='loading'?'Загружаем график…':state==='stale'?'Ждём свежие котировки':'Нет данных для графика';
     $('chart-empty').classList.remove('hidden'); $('chart-period').textContent='—';
+    priceInspector.clear();
+    drawVolume([]);
     $('orderbook').innerHTML='<p class="muted">Ожидаем заявки биржи</p>';
     $('book-samples').textContent='0 снимков';
     $('trade-plan').innerHTML='<p class="muted">План покупки появится, когда все шесть условий будут выполнены на свежих данных.</p>';
@@ -225,11 +251,44 @@
       book:a.retention===null?'Накапливаем снимки стакана':`Сохранилось ${num(a.retention*100,0)}% объёма`};
     return values[rule.key] || '';
   }
+  function plotGrid(layout,values,label,format){
+    const {width,height,left,right,top,bottom}=layout,end=width-right;
+    let svg=`<text x="${end+10}" y="17" class="plot-unit">${label}</text>`;
+    values.forEach((value,i)=>{
+      const y=top+i*(height-top-bottom)/Math.max(1,values.length-1);
+      svg+=`<line x1="${left}" x2="${end}" y1="${y}" y2="${y}" class="plot-grid"/><text x="${end+10}" y="${y+4}" class="plot-axis">${format(value)}</text>`;
+    });
+    return svg;
+  }
+  function plotCursor(layout){
+    return `<line data-plot-cursor class="plot-cursor" y1="${layout.top}" y2="${layout.height-layout.bottom}" style="visibility:hidden"/>`;
+  }
+  function drawVolume(data){
+    const svg=$('volume-chart'),empty=$('volume-empty');
+    empty.classList.toggle('hidden',data.length>0);
+    if(!data.length){svg.replaceChildren();volumeInspector.clear();return;}
+    const bounds=svg.getBoundingClientRect(),layout=chartUI.chartLayout(bounds.width,bounds.height);
+    const {width,height,left,right,top,bottom}=layout;
+    const peak=Math.max(1,...data.map(c=>Number.isFinite(c.volume)?c.volume:0));
+    const magnitude=10**Math.floor(Math.log10(peak));
+    const ceiling=Math.ceil(peak/magnitude)*magnitude;
+    const baseline=height-bottom,x=i=>left+i*(width-left-right)/Math.max(1,data.length-1);
+    const barWidth=Math.max(1,Math.min(12,(width-left-right)/data.length*.7));
+    let markup=plotGrid(layout,[ceiling,ceiling/2,0],'Лоты',value=>num(value,value<1&&value>0?1:0));
+    data.forEach((c,i)=>{
+      if(!Number.isFinite(c.volume) || c.volume<=0)return;
+      const bar=c.volume/ceiling*(baseline-top);
+      markup+=`<rect x="${x(i)-barWidth/2}" y="${baseline-bar}" width="${barWidth}" height="${bar}" rx="1" class="volume-bar"/>`;
+    });
+    svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+    svg.innerHTML=markup+chartUI.timeTicks(layout,data,x)+plotCursor(layout);
+    volumeInspector.set(data,layout,x);
+  }
   function drawChart(data,markers=[],ranges=null,structure=null,technical=null) {
     const svg=$('price-chart');
     chartSnapshot={data,markers,ranges,structure,technical};
     const layers=Object.fromEntries([...document.querySelectorAll('[data-structure-layer]')].map(n=>[n.dataset.structureLayer,n.checked]));
-    if (!data.length) {svg.innerHTML=''; $('chart-empty').classList.remove('hidden'); return;}
+    if (!data.length) {svg.innerHTML=''; $('chart-empty').classList.remove('hidden');priceInspector.clear();drawVolume([]);return;}
     $('chart-empty').classList.add('hidden');
     const bounds=svg.getBoundingClientRect();
     const layout=window.VorbyChartUI.chartLayout(bounds.width,bounds.height);
@@ -241,17 +300,14 @@
     const x=i=>left+i*(width-left-right)/Math.max(1,data.length-1);
     const y=v=>top+(max-v)/(max-min)*(height-top-bottom);
     const technicalDrawing=window.VorbyTechnical.markup(data,technical,{x,y,min,max,top,bottom:height-bottom,end:width-right},layers);
-    let out=technicalDrawing.behind;
-    for(let i=0;i<5;i++) {
-      const price=min+(max-min)*i/4,py=y(price);
-      out+=`<line x1="${left}" y1="${py}" x2="${width-right+8}" y2="${py}" stroke="#3b3b42" stroke-dasharray="3 5"/><text x="${width-right+18}" y="${py+4}" fill="#c2c2cc" font-size="11">${num(price)}</text>`;
-    }
+    let out=technicalDrawing.behind+plotGrid(layout,Array.from({length:5},(_,i)=>max-(max-min)*i/4),'Цена, ₽',
+      value=>num(value,high<.01?6:high<1?4:2));
     const barWidth=Math.max(2,Math.min(6,(width-left-right)/data.length*.58));
     data.forEach((c,i)=>{
-      const color=c.close>=c.open?'#55bfa0':'#b3757e';
+      const color=c.close>=c.open?'#8DDBAA':'#F59894';
       out+=`<line x1="${x(i)}" y1="${y(c.high)}" x2="${x(i)}" y2="${y(c.low)}" stroke="${color}"/><rect x="${x(i)-barWidth/2}" y="${Math.min(y(c.open),y(c.close))}" width="${barWidth}" height="${Math.max(1,Math.abs(y(c.open)-y(c.close)))}" fill="${color}" rx=".5"/>`;
     });
-    for(const [key,color] of [['ema','#889ef9'],['vwap','#d4ab69']]) {
+    for(const [key,color] of [['ema','#B6BCFF'],['vwap','#FFC781']]) {
       let d='',lastDay=null;
       data.forEach((c,i)=>{
         if (!Number.isFinite(c[key])) {lastDay=null;return;}
@@ -260,13 +316,9 @@
         d+=`${i===0||start||lastDay===null?'M':'L'}${x(i).toFixed(2)},${y(c[key]).toFixed(2)} `;
         lastDay=currentDay;
       });
-      out+=`<path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" opacity=".9"/>`;
+      out+=`<path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" ${key==='vwap'?'stroke-dasharray="5 4"':''}/>`;
     }
-    const timeTicks=[...new Set(Array.from({length:layout.ticks},(_,i)=>Math.round(i*(data.length-1)/(layout.ticks-1))))];
-    for(const i of timeTicks) {
-      const label=new Date(data[i].time).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Moscow'});
-      out+=`<text x="${x(i)}" y="${height-10}" fill="#c2c2cc" text-anchor="${i===0?'start':i===data.length-1?'end':'middle'}" font-size="11">${label}</text>`;
-    }
+    out+=chartUI.timeTicks(layout,data,x);
     const indices=new Map(data.map((c,i)=>[Date.parse(c.time),i]));
     const seen=new Set();
     const twenty=ranges?.status==='ok' && ranges.entry_allowed===false ? ranges.levels?.find(r=>r.bars===20) : null;
@@ -275,7 +327,7 @@
       if(!Number.isFinite(level) || level<min || level>max)continue;
       out+=`<g data-range-level="${key}"><title>${label} предыдущих 20 закрытых свечей по 15 минут: ${esc(money(level))}. Не сигнал покупки.</title><line x1="${left}" x2="${width-right}" y1="${y(level)}" y2="${y(level)}" stroke="${color}" stroke-dasharray="7 5" opacity=".65"/><text x="${left+5}" y="${y(level)-5}" fill="${color}" font-size="10">${label}</text></g>`;
     }
-    for(const marker of markers) {
+    for(const marker of (layers.patterns?markers:[])) {
       const timestamp=Date.parse(marker?.time),i=indices.get(timestamp),def=patternDefinitions.find(item=>item.key===marker?.key);
       if(i===undefined || !def || !Number.isFinite(marker.price) || marker.price<min || marker.price>max || seen.has(`${timestamp}:${marker.key}`))continue;
       seen.add(`${timestamp}:${marker.key}`);
@@ -284,7 +336,9 @@
     }
     if(window.VorbyStructure)out+=VorbyStructure.markup(data,structure,{x,y,min,max,top,bottom:height-bottom,end:width-right},layers);
     out+=technicalDrawing.front;
-    svg.innerHTML=out;
+    svg.innerHTML=out+plotCursor(layout);
+    priceInspector.set(data,layout,x);
+    drawVolume(data);
     $('chart-period').textContent=`${day(data[0].time)} — ${day(data[data.length-1].time)} · МСК`;
   }
   function renderSingle(payload) {
@@ -300,8 +354,9 @@
     displayedUntil=['LONG','EXIT'].includes(a.decision)?Math.min(Date.parse(a.data_time)+45000,Date.parse(a.updated_at)+35000):0;
     $('load-status').textContent=payload.refreshing?'Обновляем котировки; предыдущая оценка была WAIT.':mode==='demo'?'':a.blockers.length?'Данные получены; проверь ограничения ниже.':'';
     $('instrument-name').textContent=inst.name; $('ticker-label').textContent=`${inst.ticker} · ${inst.lot} шт. в лоте`;
-    $('price').textContent=money(a.price);
-    $('price-change').textContent=mode==='demo'?'Учебная котировка':'Середина лучшей покупки и продажи';
+    const hasQuote=Number.isFinite(a.price) && a.price>0;
+    showQuote(hasQuote?{ticker:inst.ticker,mode,price:a.price,at:a.price_at,source:a.price_source,refreshing:payload.refreshing}:null);
+    if(!hasQuote)$('price-change').textContent='Котировка недоступна';
     $('decision').textContent=mode==='demo'?(a.decision==='LONG'?'Пример покупки':a.decision==='EXIT'?'Пример выхода':'Пример наблюдения'):(a.decision==='LONG'?'Кандидат покупки':a.decision==='EXIT'?'Проверь продажу':'Ждать');
     $('decision').classList.toggle('positive',a.decision==='LONG');
     $('decision').classList.toggle('negative',a.decision==='EXIT');
@@ -555,6 +610,8 @@
     if(watch)$('ai-result').innerHTML='<p class="muted">Оценки ИИ появятся в карточках акций ниже. Открой акцию для объяснения признаков.</p>';
     if(watch) renderWatch(); else {
       $('symbol').value=ticker;resetRiskContext();clearSingle();
+      document.dispatchEvent(new CustomEvent('vorby:analysis-selection',{detail:{ticker,mode}}));
+      if(lastQuote)document.dispatchEvent(new CustomEvent('vorby:analysis-quote',{detail:lastQuote}));
       $('forward-result').innerHTML=mode==='demo'?'<p class="muted">В учебном режиме исходы вымышлены. Здесь появятся только наблюдения реального рынка.</p>':'<p class="muted">Читаем сохранённые наблюдения…</p>';
       $('research-result').innerHTML='<p class="muted">Нажми «Проверить на истории» после загрузки акции.</p>';
       $('research-history').value=mode==='demo'?'current':researchHistory;
@@ -686,6 +743,7 @@
   // Clear actionable prices even if a slow request or a disconnected server delays polling.
   setInterval(()=>{
     if(mode!=='live')return;
+    if(!watch)updateQuoteTime();
     if(!watch&&$('research-helper')&&currentHelper?.data_review?.state==='fresh_live'&&Date.now()>Date.parse(currentHelper.data_review.valid_until)){
       currentHelper=window.VorbyResearchHelper.state(currentHelper,mode);
       $('research-helper').innerHTML=window.VorbyResearchHelper.markup(currentHelper,mode);

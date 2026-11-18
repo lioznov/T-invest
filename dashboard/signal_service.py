@@ -5,6 +5,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
@@ -64,6 +65,12 @@ def update(key):
     try:
         snapshot = demo_snapshot(ticker) if mode=="demo" else live_snapshot(ticker,previous)
         analysis = analyse(snapshot)
+        book = snapshot["books"][-1] if snapshot.get("books") else {}
+        if valid_book(book):
+            analysis.update(price_source="book", price_at=analysis["data_time"])
+        elif snapshot["candles"]:
+            close_at = snapshot["candles"][-1].time + timedelta(minutes=15)
+            analysis.update(price_source="candle", price_at=close_at.isoformat())
         from .candle_pattern_panel import candle_panel
         analysis["candle_patterns"] = candle_panel(snapshot)
         from .range_levels import range_levels

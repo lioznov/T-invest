@@ -36,6 +36,20 @@
       || now>=Date.parse(f.as_of)+15*60*1000;
     return {state:historical?'historical':'ok',forecast:f};
   }
+  function overviewState(value,selection,quote,now=Date.now()){
+    if(!selection || selection.mode==='demo')return {state:'demo'};
+    if(value?.status==='loading' && value.ticker===selection.ticker)return {state:'loading'};
+    if(value?.ticker!==selection.ticker || value.entry_allowed!==false)return {state:'unavailable'};
+    const {state,forecast}=forecastState(value,now);
+    if(state!=='ok')return {state};
+    const result={state,forecast};
+    if(quote?.ticker===selection.ticker && quote.mode===selection.mode && positive(quote.price)){
+      result.delta=forecast.predicted_price-quote.price;
+      const percentChange=result.delta/quote.price*100;
+      if(finite(percentChange))result.percentChange=percentChange;
+    }
+    return result;
+  }
   function mount(document,env){
     const form=document.getElementById('morning-form');
     if(!form)return null;
@@ -43,6 +57,41 @@
     const field=byId('morning-ticker'),button=byId('morning-refresh'),badge=byId('morning-badge');
     const status=byId('morning-status'),result=byId('morning-result'),report=byId('morning-report');
     let sequence=0,controller=null,expiryTimer=null;
+    const overview=byId('forecast-overview');
+    let selection=null,quote=null,overviewValue=null,overviewExpiry=null;
+    function renderOverview(){
+      if(overviewExpiry!==null)env.clearTimeout(overviewExpiry);
+      overviewExpiry=null;
+      const {state,forecast,delta,percentChange}=overviewState(overviewValue,selection,quote);
+      const ready=state==='ok';
+      overview.dataset.state=state;
+      overview.setAttribute('aria-busy',String(state==='loading'));
+      byId('forecast-overview-price').textContent=ready?price(forecast.predicted_price):
+        state==='loading'?'Загружаем прогноз…':'Прогноз на завтра пока недоступен';
+      const explanations={
+        demo:'В учебном режиме доступны только примеры котировок.',
+        historical:'Сохранённый расчёт доступен в архиве. Для нового прогноза нужен свежий вечерний расчёт.',
+        unavailable:overviewValue?.message || 'Для выбранной акции пока нет свежего сохранённого расчёта.',
+      };
+      byId('forecast-overview-detail').textContent=ready
+        ? `Расчётная оценка на ${date(forecast.target_at)}. Данные модели на ${date(forecast.as_of)}.`
+        : explanations[state] || 'Проверяем сохранённый расчёт для выбранной акции.';
+      const difference=byId('forecast-overview-change');
+      difference.hidden=!ready || !finite(delta);
+      difference.textContent=difference.hidden?'':`К последней доступной цене ${delta>0?'+':''}${number(delta,Math.abs(delta)<.01 && delta!==0?6:2)} ₽${finite(percentChange)?' ('+percent(percentChange)+')':''}`;
+      const range=byId('forecast-overview-range');
+      range.hidden=!ready || !positive(forecast.lower_price) || !positive(forecast.upper_price) ||
+        forecast.lower_price>forecast.predicted_price || forecast.upper_price<forecast.predicted_price;
+      range.textContent=range.hidden?'':`Диапазон оценки ${price(forecast.lower_price)} – ${price(forecast.upper_price)}. Его ширина основана на прошлых ошибках модели.`;
+      const direction=byId('forecast-overview-direction');
+      direction.hidden=!ready;
+      const directions={up:'Возможен рост',down:'Возможно снижение',uncertain:'Направление неопределённо'};
+      direction.textContent=ready?`${directions[forecast.direction] || directions.uncertain} относительно цены на ${date(forecast.as_of)} (${price(forecast.anchor_price)}).`:'';
+      if(ready){
+        const expires=Math.min(Date.parse(forecast.target_at),Date.parse(forecast.as_of)+900000);
+        overviewExpiry=env.setTimeout(renderOverview,Math.max(1,expires-Date.now()));
+      }
+    }
     function clearExpiry(){if(expiryTimer!==null){env.clearTimeout(expiryTimer);expiryTimer=null;}}
     function node(tag,text,className){const item=document.createElement(tag);if(text!==undefined)item.textContent=text;if(className)item.className=className;return item;}
     function paragraph(parent,text,className='muted small'){parent.append(node('p',text,className));}
@@ -156,15 +205,38 @@
       try{
         const response=await env.fetch(`/api/morning-forecast/?ticker=${encodeURIComponent(symbol)}&mode=${mode}`,{cache:'no-store',signal:active.signal});
         const value=await response.json();if(current!==sequence)return;
-        if(!response.ok)render({status:'unavailable',message:typeof value?.message==='string'?value.message:undefined});
-        else render(value);
-      }catch{if(current===sequence)render({status:'unavailable',message:'Не удалось получить ответ сервера. Текущий прогноз не подтверждён.'});}
+        if(!response.ok)publish({status:'unavailable',ticker:symbol,message:typeof value?.message==='string'?value.message:undefined},symbol,mode);
+        else publish(value,symbol,mode);
+      }catch{if(current===sequence)publish({status:'unavailable',ticker:symbol,message:'Не удалось получить ответ сервера. Текущий прогноз не подтверждён.'},symbol,mode);}
       finally{env.clearTimeout(timer);if(current===sequence)button.disabled=false;}
+    }
+    function publish(value,symbol,mode){
+      render(value);
+      if(overview && selection?.ticker===symbol && selection.mode===mode){
+        overviewValue=value;
+        renderOverview();
+      }
     }
     const selected=new URLSearchParams(env.location.search).get('ticker')?.toUpperCase();if(ticker(selected))field.value=selected;
     form.addEventListener('submit',event=>{event.preventDefault();load();});
-    document.querySelectorAll('[data-mode]').forEach(element=>element.addEventListener('click',load));
-    load();return {render,load};
+    if(overview){
+      document.addEventListener('vorby:analysis-selection',event=>{
+        selection=event.detail;
+        quote=null;
+        field.value=selection.ticker;
+        overviewValue={status:'loading',ticker:selection.ticker};
+        renderOverview();
+        load();
+      });
+      document.addEventListener('vorby:analysis-quote',event=>{
+        quote=event.detail;
+        if(overviewValue?.status==='ok')renderOverview();
+      });
+    }else{
+      document.querySelectorAll('[data-mode]').forEach(element=>element.addEventListener('click',load));
+      load();
+    }
+    return {render,load};
   }
-  return {forecastState,mount,price,percent,date,periodDateRange};
+  return {forecastState,overviewState,mount,price,percent,date,periodDateRange};
 });

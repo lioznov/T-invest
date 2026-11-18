@@ -1,6 +1,6 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {chartLayout,scenarioPrice}=require('../static/js/chart_ui.js');
+const {chartLayout,scenarioPrice,timeTicks}=require('../static/js/chart_ui.js');
 
 test('mobile chart coordinates match its real width instead of scaling an 800px canvas',()=>{
   const layout=chartLayout(313.6,280);
@@ -11,7 +11,13 @@ test('mobile chart coordinates match its real width instead of scaling an 800px 
 });
 test('desktop chart preserves all available drawing space',()=>{
   const layout=chartLayout(940,310);
-  assert.equal(layout.width,940);assert.equal(layout.ticks,4);
+  assert.equal(layout.width,940);assert.equal(layout.ticks,5);
+});
+test('axes distinguish calendar dates and show Moscow time on both plots',()=>{
+  const view=timeTicks(chartLayout(314,280),[
+    {time:'2026-11-17T15:00:00Z'},{time:'2026-11-18T07:00:00Z'}
+  ],i=>14+i*180);
+  for(const value of ['17.11','18.11','18:00','10:00'])assert.ok(view.includes(value));
 });
 test('unmeasured or extreme small chart containers have safe layout defaults',()=>{
   assert.equal(chartLayout(NaN,NaN).width,800);

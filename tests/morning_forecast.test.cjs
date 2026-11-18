@@ -7,6 +7,21 @@ const api=require('../static/js/morning_forecast.js');
 const script=fs.readFileSync(path.join(__dirname,'../static/js/morning_forecast.js'),'utf8');
 const future='2099-10-22T07:00:00+00:00';
 const valid=()=>({status:'ok',ticker:'SBER',entry_allowed:false,forecast:{as_of:'2099-10-21T14:45:00+00:00',target_at:future,anchor_price:300,predicted_price:303,lower_price:295,upper_price:310,predicted_change_pct:1,direction:'up'}});
+test('top result compares to the displayed quote and rejects archive, demo and other instruments',()=>{
+  const selection={ticker:'SBER',mode:'live'};
+  const quote={...selection,price:300};
+  const now=Date.parse('2099-10-21T14:53:00Z');
+  const value=valid();
+  value.forecast.anchor_price=299;
+  const shown=api.overviewState(value,selection,quote,now);
+  assert.equal(shown.forecast.predicted_price,303);
+  assert.equal(shown.delta,3);
+  assert.equal(shown.percentChange,1);
+  assert.equal(api.overviewState(value,selection,{...quote,ticker:'GAZP'},now).delta,undefined);
+  assert.equal(api.overviewState(value,{...selection,ticker:'GAZP'},quote,now).forecast,undefined);
+  assert.equal(api.overviewState(value,{...selection,mode:'demo'},quote,now).forecast,undefined);
+  assert.equal(api.overviewState(value,selection,quote,Date.parse('2099-10-21T15:00:00Z')).state,'historical');
+});
 function harness(value=valid(),options={}){
   const nodes=new Map();
   function node(tag='div'){return {tagName:tag,textContent:'',value:'SBER',disabled:false,children:[],dataset:{},append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},addEventListener(name,handler){this[name]=handler;}};}
