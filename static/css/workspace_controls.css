@@ -1,0 +1,145 @@
+/* Shared controls for the light workspace and its dark panels. */
+body {
+  --control-ink: #303831;
+  --control-muted: #566151;
+  --control-edge: #adb6a5;
+  --control-surface: #f7f8f4;
+  --control-hover: #edf1e3;
+  --control-focus: #526810;
+}
+
+body select:not([multiple]):not([size]),
+body select[size="1"] {
+  appearance: none;
+  color-scheme: light;
+  color: var(--control-ink);
+  background: var(--control-surface) url("../img/control-chevron.svg") right 13px center / 14px no-repeat;
+  border: 1px solid var(--control-edge);
+  padding: 9px 35px 9px 12px;
+  min-height: 44px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+body select:not([multiple]):not([size]):hover:not(:disabled),
+body select[size="1"]:hover:not(:disabled) {
+  background-color: var(--control-hover);
+  border-color: #748363;
+}
+body select option { color: var(--control-ink); background: var(--control-surface); }
+body select option:checked { background-color: #e3edbc; }
+body :is(select,input,textarea):disabled { cursor: not-allowed; opacity: .66; }
+body :is(input,textarea)::placeholder { color: #626b60; }
+body :is(.button,.watchlist-btn):active:not(:disabled) { transform: translateY(1px); }
+body :is(select,input,button,summary,a):focus-visible { outline-color: var(--control-focus) !important; }
+body :is(.signal-panel,.analysis-forecast,.summary-card,.main-grid > .panel:first-child) :focus-visible {
+  outline-color: #d7ed78 !important;
+}
+
+body details > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 12px;
+  min-height: 42px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+body details > summary::-webkit-details-marker { display: none; }
+body details > summary::marker { content: ""; }
+body details > summary::before { content: none; }
+body details > summary::after,
+.watchlist-btn::after {
+  content: "";
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  margin-inline-start: auto;
+  background: currentColor;
+  mask: url("../img/control-chevron.svg") center / contain no-repeat;
+  transform: rotate(0);
+  transition: transform .18s ease;
+}
+body details[open] > summary::after,
+.watchlist-btn[aria-expanded="true"]::after {
+  content: "";
+  transform: rotate(180deg);
+}
+body details > summary:hover { text-decoration: underline; text-underline-offset: .2em; }
+body details > summary > :is(span,small) { min-width: 0; }
+body .studio-filter-drawer > summary > span { color: var(--control-muted); margin-inline-start: auto; }
+body .studio-filter-drawer > summary::after { margin-inline-start: 0; }
+body details[open] > summary::before { content: none; }
+body .studio-filter-drawer .news-filters select {
+  color: var(--control-ink);
+  background-color: var(--control-surface);
+  border-color: var(--control-edge);
+}
+body[data-page="news"] .news-filter-secondary label { display: grid; gap: 6px; }
+body .watchlist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #535b4d;
+  border-radius: 12px;
+  background: #3d3d3d;
+  color: #ebecee;
+  min-height: 44px;
+}
+body .watchlist-btn:hover, body .watchlist-btn[aria-expanded="true"] { background: #51564f; }
+body .watchlist-btn::after { margin-inline-start: 7px; }
+body .watchlist-content {
+  display: block;
+  top: calc(100% + 8px);
+  width: min(300px,calc(100vw - 36px));
+  max-height: min(400px,50vh);
+  background: var(--control-surface);
+  color: var(--control-ink);
+  border: 1px solid var(--control-edge);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px #25282024;
+  z-index: 126;
+}
+
+body .instrument-suggestions, body .search-dropdown {
+  background: var(--control-surface);
+  border-color: var(--control-edge);
+  overscroll-behavior: contain;
+  max-height: min(320px,45vh);
+}
+body :is(.notification-intro,.notification-connection,.notification-selection,.notification-runtime,
+  .notification-footnote,.metric small,.score small,.news-story-meta,.workspace-footer,.news-footer,
+  .empty-chart-message,#portfolioStatus,.badge,.studio-rail-label) { color: var(--control-muted); }
+body .notification-panel > summary > small, body .focus-disclosure > summary small { color: var(--control-muted); }
+body .notification-delivery[data-result="rejected"] { color: #942e3c; }
+body .notification-switch input:checked + span { background: #647b20; border-color: #647b20; }
+body .portfolio-table th { color: var(--control-muted) !important; }
+body .close-timing-panel .close-timing-warning { color: #555e51; background: #eef1e8; }
+body .main-grid > .panel:first-child select { color: var(--control-ink); }
+
+@media (min-width: 721px) and (max-width: 1050px) {
+  body :is(.controls,.radar-controls) .notification-panel { flex-basis: 100%; }
+  body :is(.controls,.radar-controls) .notification-body {
+    position: static;
+    width: auto;
+    max-height: none;
+    box-shadow: none;
+    border-radius: 0 0 17px 17px;
+  }
+}
+@media (max-width: 720px) {
+  body .watchlist-dropdown-container { width: 100%; }
+  body .watchlist-content { left: 0; right: auto; }
+  body .notification-channel .button, body .focus-tabs button, body .mode-switch button { min-height: 44px; }
+  body .site-header .nav-link { min-height: 42px; }
+  body .studio-filter-drawer > summary > span { max-width: 44%; }
+}
+@media (forced-colors: active) {
+  body select:not([multiple]):not([size]) { appearance: auto; background-image: none; }
+  body details > summary::after, .watchlist-btn::after { background: ButtonText; forced-color-adjust: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body details > summary::after, .watchlist-btn::after { transition: none; }
+}

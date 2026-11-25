@@ -4,28 +4,26 @@
     <div><h2 id="instrument-name">SBER</h2><p id="ticker-label">SBER · TQBR</p></div>
   </header>
   <div class="analysis-result-grid">
-    <div class="analysis-quote">
-      <h3>Последняя доступная цена</h3>
-      <strong id="price">—</strong>
-      <p id="price-change">Загружаем котировку…</p>
-      <strong id="forecast-anchor-price" hidden></strong>
-      <p id="forecast-anchor-source" hidden></p>
-    </div>
-    <div id="forecast-overview" class="analysis-forecast">
-      <h3 id="forecast-overview-label">Расчётная цена на следующее торговое утро</h3>
+    <article id="forecast-overview" class="analysis-forecast" aria-labelledby="forecast-overview-label">
+      <h3 id="forecast-overview-label">Прогноз на следующее торговое утро</h3>
       <strong id="forecast-overview-price">—</strong>
       <p id="forecast-overview-detail" hidden></p>
       <p id="forecast-overview-change" hidden></p>
-      <p id="forecast-overview-range" hidden></p>
-      <p id="forecast-overview-direction" hidden></p>
-      <p id="forecast-overview-actual" hidden></p>
-      <p id="forecast-job-status" role="status">Загружаем состояние…</p>
-      <form id="forecast-job-form" class="forecast-job-actions" aria-describedby="forecast-job-status">
-        {% csrf_token %}
-        <button id="forecast-run" class="button primary" type="submit" disabled>Рассчитать прогноз</button>
-        <button id="forecast-compare" class="button forecast-compare" type="button" hidden>Проверить фактическую цену</button>
-      </form>
-      <a class="analysis-forecast-link" href="#morning-forecast">Архив и качество модели <span aria-hidden="true">↗</span></a>
-    </div>
+      <p id="forecast-job-status" role="status">Выбери акцию и нажми «Анализировать».</p>
+      <div class="morning-quote">
+        <span>Последняя доступная цена</span>
+        <strong id="price">—</strong>
+        <p id="price-change">Котировка появится после анализа.</p>
+      </div>
+    </article>
+    <article class="analysis-quote analysis-intraday" aria-labelledby="intraday-title">
+      <h3 id="intraday-title">Анализ графика и стакана</h3>
+      <p id="intraday-decision" class="intraday-decision">—</p>
+      <p id="intraday-feedback">Оценка появится после анализа.</p>
+      <p id="intraday-data" hidden></p>
+      <div id="intraday-model"></div>
+      <a class="focus-text-link" href="#focus-market">Шесть условий и стакан</a>
+      <details class="intraday-guide"><summary>Что проверяют шесть условий</summary><p>Тренд цены, перевес покупателей в сделках, повышенный объём, удержание средней цены дня, узкий спред и устойчивость спроса в стакане.</p></details>
+    </article>
   </div>
 </section>

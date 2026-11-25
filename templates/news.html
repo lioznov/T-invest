@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Новости и события — Vorby Pro</title>
-<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=9">
-<link rel="stylesheet" href="{% static 'css/news.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/signals.css' %}?v=11">
+<link rel="stylesheet" href="{% static 'css/news.css' %}?v=3">
 {% include "_theme_head.html" %}
 <script src="{% static 'js/news.js' %}?v=2" defer></script>
 </head>
@@ -21,7 +21,7 @@
     <div><span>Негативных</span><strong id="news-negative">—</strong><small>Не команда продавать</small></div>
     <div><span>Источников онлайн</span><strong id="news-source-count">—</strong><small>Доступность RSS-лент</small></div>
   </div>
-  <details class="studio-filter-drawer"><summary>Настроить ленту <span>Компании, источники и тональность ↗</span></summary>
+  <details class="studio-filter-drawer"><summary>Настроить ленту <span>Компании, источники и тональность</span></summary>
   <form id="news-filters" class="panel news-filters" aria-label="Фильтры новостей">
     <label>КОМПАНИЯ<select id="news-ticker" name="ticker"><option value="">Все компании</option>{% for ticker in tickers %}<option value="{{ ticker }}">{{ ticker }}</option>{% endfor %}</select></label>
     <label>ИСТОЧНИК<select id="news-source" name="source"><option value="">Все доступные</option>{% for source in sources %}{% if source.enabled %}<option value="{{ source.id }}">{{ source.name }}</option>{% endif %}{% endfor %}</select></label>

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% if watchlist %}Обзор акций{% else %}Анализ акции{% endif %} — vorby pro</title>
-  <link rel="stylesheet" href="{% static 'css/signals.css' %}?v=10">
+  <link rel="stylesheet" href="{% static 'css/signals.css' %}?v=11">
   <link rel="stylesheet" href="{% static 'css/ai.css' %}?v=3">
   <link rel="stylesheet" href="{% static 'css/market_structure.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/technical_chart.css' %}?v=1">
@@ -17,37 +17,37 @@
   <link rel="stylesheet" href="{% static 'css/temporal_validation.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'css/trading_helper.css' %}?v=1">
   {% include "_theme_head.html" %}
-  {% if not watchlist %}<link rel="stylesheet" href="{% static 'css/stock_analysis.css' %}?v=3"><link rel="stylesheet" href="{% static 'css/forecast_workflow.css' %}?v=1">{% endif %}
-  <script src="{% static 'js/instrument_search.js' %}?v=1" defer></script>
+  {% if not watchlist %}<link rel="stylesheet" href="{% static 'css/stock_analysis.css' %}?v=3"><link rel="stylesheet" href="{% static 'css/forecast_workflow.css' %}?v=4">{% endif %}
+  <script src="{% static 'js/instrument_search.js' %}?v=2" defer></script>
   <script src="{% static 'js/market_structure.js' %}?v=1" defer></script>
   <script src="{% static 'js/technical_chart.js' %}?v=1" defer></script>
   <script src="{% static 'js/neural_trader.js' %}?v=1" defer></script>
   <script src="{% static 'js/chart_ui.js' %}?v=2" defer></script>
   <script src="{% static 'js/trading_helper.js' %}?v=1" defer></script>
   <script src="{% static 'js/risk_ui.js' %}?v=1" defer></script>
-  {% if not watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=3" defer></script><script src="{% static 'js/forecast_workflow.js' %}?v=1" defer></script>{% endif %}
-  <script src="{% static 'js/signals.js' %}?v=37" defer></script>
+  {% if not watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=3" defer></script><script src="{% static 'js/auto_analysis.js' %}?v=4" defer></script>{% endif %}
+  <script src="{% static 'js/signals.js' %}?v=41" defer></script>
   <script src="{% static 'js/news.js' %}?v=2" defer></script>
   {% if watchlist %}<script src="{% static 'js/morning_forecast.js' %}?v=3" defer></script>{% endif %}
   <script src="{% static 'js/close_timing.js' %}?v=2" defer></script>
   <script src="{% static 'js/multiyear_research.js' %}?v=2" defer></script>
   <script src="{% static 'js/temporal_validation.js' %}?v=1" defer></script>
-  <script src="{% static 'js/workspace_focus.js' %}?v=4" defer></script>
+  <script src="{% static 'js/workspace_focus.js' %}?v=5" defer></script>
 </head>
-<body class="focus-workspace" data-page="{% if watchlist %}watchlist{% else %}single{% endif %}" data-token="{{ has_token|yesno:'true,false' }}" data-forecast-tickers="{{ forecast_tickers|join:' ' }}">
+<body class="focus-workspace" data-page="{% if watchlist %}watchlist{% else %}single{% endif %}" data-token="{{ has_token|yesno:'true,false' }}">
   {% if watchlist %}{% include "_app_sidebar.html" with active_page="watchlist" %}{% else %}{% include "_app_sidebar.html" with active_page="single" %}{% endif %}
   <main>
     <header class="topbar"><div class="breadcrumb">Рабочее пространство <span>/</span> {% if watchlist %}Обзор акций{% else %}Анализ акции{% endif %}</div><div class="top-status"><span class="tiny-dot"></span> Только анализ <span class="separator">|</span><span id="clock"></span></div></header>
     <div class="workspace">
-      <div class="page-heading focus-heading{% if not watchlist %} forecast-page-heading{% endif %}">{% if watchlist %}{% include "_studio_art.html" %}{% endif %}<div><h1>{% if watchlist %}Рынок под контролем{% else %}Прогноз цены акции{% endif %}</h1>{% if watchlist %}<p class="subtitle">Все выбранные акции и их состояние в одном месте.</p>{% endif %}</div><div class="mode-switch" role="group" aria-label="Источник данных"><button data-mode="live" class="selected">Рынок</button><button data-mode="demo">Учебный режим</button></div></div>
+      <div class="page-heading focus-heading{% if not watchlist %} forecast-page-heading{% endif %}">{% if watchlist %}{% include "_studio_art.html" %}{% endif %}<div><h1>{% if watchlist %}Рынок под контролем{% else %}Прогноз цены акции{% endif %}</h1>{% if watchlist %}<p class="subtitle">Все выбранные акции и их состояние в одном месте.</p>{% endif %}</div>{% if watchlist %}<div class="mode-switch" role="group" aria-label="Источник данных"><button type="button" data-mode="live" class="selected">Рынок</button><button type="button" data-mode="demo">Учебный режим</button></div>{% endif %}</div>
       {% if not watchlist %}
-      <div class="instrument-toolbar"><form id="symbol-form" class="symbol-form"><label class="sr-only" for="symbol">Тикер акции</label><span class="search-icon">⌕</span><div class="instrument-search-wrap"><input id="symbol" value="SBER" placeholder="Тикер, например SBER" maxlength="15" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"><div id="symbol-suggestions" class="instrument-suggestions" role="listbox"></div></div><button type="submit" class="button primary">Выбрать</button></form><button class="button ghost" id="refresh" aria-label="Обновить котировки" title="Обновить котировки">Обновить ↻</button></div>
+      <div class="instrument-toolbar"><form id="symbol-form" class="symbol-form">{% csrf_token %}<label class="sr-only" for="symbol">Тикер акции</label><span class="search-icon">⌕</span><div class="instrument-search-wrap"><input id="symbol" value="SBER" placeholder="Тикер, например SBER" maxlength="15" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"><div id="symbol-suggestions" class="instrument-suggestions" role="listbox"></div></div><button id="analysis-run" type="submit" class="button primary">Анализировать</button></form><p id="analysis-progress" class="analysis-progress" role="status"></p></div>
 {% endif %}
       <div id="mode-banner" class="notice" role="status"></div>
       <div class="studio-workbench"><nav class="focus-tabs" aria-label="Разделы анализа" role="tablist">
         <button type="button" id="tab-now" role="tab" aria-selected="true" aria-controls="focus-now" data-focus-tab="now">{% if watchlist %}Список акций{% else %}Прогноз и график{% endif %}</button>
         {% if not watchlist %}<button type="button" id="tab-market" role="tab" aria-selected="false" aria-controls="focus-market" tabindex="-1" data-focus-tab="market">Цена и заявки</button>{% endif %}
-        <button type="button" id="tab-research" role="tab" aria-selected="false" aria-controls="focus-research" tabindex="-1" data-focus-tab="research">История и проверки</button>
+        <button type="button" id="tab-research" role="tab" aria-selected="false" aria-controls="focus-research" tabindex="-1" data-focus-tab="research">{% if watchlist %}История и проверки{% else %}Подробнее{% endif %}</button>
         <button type="button" id="tab-settings" role="tab" aria-selected="false" aria-controls="focus-settings" tabindex="-1" data-focus-tab="settings">Настройки</button>
       </nav>
       <section id="focus-now" class="focus-pane" role="tabpanel" aria-labelledby="tab-now" data-focus-pane="now">
@@ -135,7 +135,7 @@
       {% endif %}
       <section id="focus-research" class="focus-pane" role="tabpanel" aria-labelledby="tab-research" data-focus-pane="research" hidden>
         <div class="focus-section-heading"><h2>Насколько можно доверять моделям</h2><p>Здесь результаты проверок. Плюс на истории сам по себе не подтверждает будущую прибыль.</p></div>
-      <details class="panel focus-disclosure"><summary>Архив прогноза и проверка модели</summary><div class="focus-disclosure-body">{% include "_morning_forecast.html" %}</div></details>
+      <details class="panel focus-disclosure"><summary>Качество прогноза</summary><p id="auto-morning-quality" class="research-meta market-quality"></p><div class="focus-disclosure-body">{% include "_morning_forecast.html" %}</div></details>
       <details class="panel focus-disclosure"><summary>Другие модели анализа</summary>
         <div class="focus-disclosure-body models-strip">
       <details class="panel ai-panel model-disclosure" aria-labelledby="ai-heading"><summary>Оценка условий по графику</summary>
@@ -191,7 +191,7 @@
         </form>
         <div id="risk-result" aria-live="polite"><p class="muted research-meta">Укажи цены сценария — здесь появятся количество акций и сумма покупки.</p></div>
       </section>
-      <details class="panel focus-disclosure" id="data-connection"><summary><span><strong>Подключение данных</strong><small>Диагностика загрузки котировок</small></span></summary><div class="focus-disclosure-body"><p id="connection-detail" class="research-meta">Проверяем соединение. Учебный режим доступен без подключения к брокеру.</p></div></details>
+      <details class="panel focus-disclosure" id="data-connection"><summary><span><strong>Подключение данных</strong><small>Диагностика загрузки котировок</small></span></summary><div class="focus-disclosure-body">{% if not watchlist %}<div class="mode-switch" role="group" aria-label="Источник данных"><button type="button" data-mode="live">Рынок</button><button type="button" data-mode="demo">Учебный пример</button></div>{% endif %}<p id="connection-detail" class="research-meta">Проверяем соединение. Учебный режим доступен без подключения к брокеру.</p></div></details>
 {% endif %}
       {% include "_market_monitor.html" %}
       </section>

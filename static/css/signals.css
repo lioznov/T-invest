@@ -12,25 +12,3 @@
 .market-monitor [data-monitor-state=active] { background: #e3efce; color: #354b27; }
 .market-monitor summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
 .market-monitor code { overflow-wrap: anywhere; }
-
-/* Native details keep their keyboard and touch behavior with a shared disclosure icon. */
-.focus-workspace main details > summary {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: nowrap; gap: 12px; min-height: 44px;
-  list-style: none; cursor: pointer;
-}
-.focus-workspace main details > summary::-webkit-details-marker { display: none; }
-.focus-workspace main details > summary::before,
-.focus-workspace main details > summary.aligned-disclosure::after {
-  content: none;
-}
-.disclosure-label { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; min-width: 0; overflow-wrap: anywhere; }
-.focus-workspace main details > summary:not(.aligned-disclosure)::after,
-.disclosure-chevron {
-  content: "";
-  width: 8px; height: 8px; flex: 0 0 8px; margin: 0 4px 4px 0;
-  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-  border-radius: 1px; transform: rotate(45deg); transition: transform .18s ease;
-}
-.focus-workspace main details[open] > summary:not(.aligned-disclosure)::after,
-details[open] > summary > .disclosure-chevron { transform: translateY(4px) rotate(225deg); }

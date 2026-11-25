@@ -7,6 +7,7 @@ from dashboard import vk_views
 from dashboard import radar_vk_views
 from dashboard import notification_views
 from dashboard import morning_views
+from dashboard import auto_morning_views
 from dashboard import close_timing_views
 from dashboard import multiyear_views
 from dashboard import temporal_validation_views
@@ -42,6 +43,7 @@ urlpatterns = [
     path('api/notifications/', notification_views.settings, name='notification_settings'),
     path('api/ai-model/', signal_views.ai_model, name='ai_model'),
     path('api/morning-forecast/', morning_views.forecast, name='morning_forecast'),
+    path('api/analysis/morning/', auto_morning_views.morning, name='auto_morning'),
     path('api/morning-forecast/job/', morning_views.forecast_job, name='morning_forecast_job'),
     path('api/close-timing/', close_timing_views.report, name='close_timing'),
     path('api/multiyear-research/', multiyear_views.report, name='multiyear_research'),

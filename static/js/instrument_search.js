@@ -23,8 +23,11 @@
     input.setAttribute('role', 'combobox');
     input.setAttribute('aria-autocomplete', 'list');
     input.setAttribute('aria-expanded', 'false');
+    if (dropdown.id) input.setAttribute('aria-controls', dropdown.id);
 
     function close() {
+      clearTimeout(timer);
+      revision++;
       dropdown.style.display = 'none';
       input.setAttribute('aria-expanded', 'false');
       active = -1;
@@ -111,7 +114,8 @@
       if (!options.length || dropdown.style.display === 'none') return;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
-        active = (active + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+        active = active < 0 && event.key === 'ArrowUp' ? options.length - 1 :
+          (active + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
         options.forEach((button, index) => button.setAttribute('aria-selected', String(index === active)));
         options[active].scrollIntoView({block: 'nearest'});
       } else if (event.key === 'Enter' && active >= 0) {

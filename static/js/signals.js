@@ -18,6 +18,7 @@
   let symbols=read('vorby.watchlist',['SBER','GAZP','LKOH','YDEX']);
   if (!Array.isArray(symbols)) symbols=[];
   symbols=[...new Set(symbols.filter(s=>typeof s==='string' && validTicker(s)))].slice(0,20);
+  let analysisStarted=watch || mode==='demo';
   let generation=0, timer, researchGeneration=0, displayedUntil=0, paperRevision=0, riskRevision=0, patternResearchRevision=0;
   let patternUntil=0;
   let riskContext='', riskTouched=false, currentPlan=null;
@@ -33,12 +34,13 @@
 
   function showQuote(quote){
     lastQuote=quote;
+    delete $('price').dataset.anchorDisplayed;
     $('price').textContent=quote?`${num(quote.price,quote.price<1?6:2)} ₽`:'—';
     if(quote)updateQuoteTime();
     document.dispatchEvent(new CustomEvent('vorby:analysis-quote',{detail:quote}));
   }
   function updateQuoteTime(){
-    if(!lastQuote)return;
+    if(!lastQuote || $('price').dataset.anchorDisplayed)return;
     const {at,source,refreshing}=lastQuote,stamp=Date.parse(at);
     const age=Date.now()-stamp;
     const stale=mode==='live' && Number.isFinite(age) && age>(source==='book'?45000:17*60000);
@@ -162,7 +164,7 @@
     currentHelper=null;
     if($('research-helper'))$('research-helper').innerHTML=window.VorbyResearchHelper.markup(null,mode);
     displayedUntil=0;
-    $('load-status').textContent=state==='unavailable'?'Котировки недоступны. Проверь подключение или попробуй обновить позже.':message;
+    $('load-status').textContent=state==='idle'?'':state==='unavailable'?'Котировки недоступны. Проверь подключение или попробуй обновить позже.':message;
     $('signal-panel').dataset.state=state;
     $('signal-panel').setAttribute('aria-busy',String(state==='loading'));
     if($('connection-detail'))$('connection-detail').textContent=message;
@@ -352,9 +354,39 @@
     drawVolume(data);
     $('chart-period').textContent=`${day(data[0].time)} — ${day(data[data.length-1].time)} · МСК`;
   }
+  let intradayPayload=null;
+  function updateIntraday(payload,error='') {
+    intradayPayload=payload;
+    const result=$('intraday-decision'), feedback=$('intraday-feedback'), data=$('intraday-data'), model=$('intraday-model');
+    const a=payload?.analysis;
+    const stamp=Date.parse(a?.data_time);
+    const updated=Date.parse(a?.updated_at);
+    const now=Date.now(), bookFresh=now-stamp>=0 && now-stamp<=45000;
+    const fresh=mode==='live' && a && !payload.refreshing && bookFresh && now-updated>=0 && now-updated<=35000 && a.data_quality?.action_blocked===false;
+    result.textContent=fresh ? (a.decision==='LONG'?'Кандидат покупки':a.decision==='EXIT'?'Проверь открытую позицию':'Ждать') : '—';
+    const qualityMessage = bookFresh && a?.data_quality?.action_blocked
+      ? 'График доступен. Биржевой источник или полнота стакана не подтверждены.'
+      : 'Нет подтверждённых свежих данных для шести условий.';
+    feedback.textContent=fresh ? `Выполнено ${a.passed} из 6 условий покупки.` : error ||
+      (mode==='demo'?'Для оценки по реальным данным нажми «Анализировать».':a?qualityMessage:'Оценка появится после анализа.');
+    data.hidden=!fresh;
+    data.textContent=fresh ? `Свечи, объём, сделки и стакан · ${day(a.data_time)}, ${time(a.data_time)}` : '';
+    const neural=window.VorbyNeural.state(a?.neural,mode,now);
+    const reason=a?.neural?.message || 'Нужны свежая свеча и подтверждённый стакан.';
+    model.textContent=neural.status==='ok' && fresh
+      ? `Часовой сценарий нейросети: ${num(neural.expected_net_pct)}% после расходов · оценка положительного исхода ${num(neural.score,0)}/100. Модель оценивает сценарий покупки и возможный стоп.`
+      : a && mode==='live' ? `Часовая оценка недоступна. ${neural.status==='ok'?reason:neural.message}` : '';
+  }
   function renderSingle(payload) {
-    if(payload.status!=='ok') {clearSingle(payload.message || 'Получаем историю и рыночные данные…',payload.status==='error'?'unavailable':'loading'); return;}
+    document.dispatchEvent(new CustomEvent('vorby:analysis-market',{detail:{ticker,pending:payload.status==='loading'}}));
+    if(payload.status!=='ok' || payload.mode!==mode || payload.instrument?.ticker!==ticker) {
+      const failed=payload.status==='error';
+      clearSingle(payload.message || 'Загружаем данные…',failed?'unavailable':'loading');
+      updateIntraday(null,failed?'Не удалось загрузить свежие данные. Нажми «Анализировать» ещё раз.':'Загружаем данные…');
+      return;
+    }
     const a=payload.analysis,inst=payload.instrument;
+    updateIntraday(payload);
     $('signal-panel').dataset.state=mode==='demo'?'demo':'ready';
     $('signal-panel').setAttribute('aria-busy','false');
     if($('connection-detail'))$('connection-detail').textContent=mode==='demo'?'Учебный режим работает без подключения к брокеру.':'Последний запрос котировок выполнен. Статус качества данных показан рядом с графиком.';
@@ -620,7 +652,9 @@
     loadAiModel(generation);
     if(watch)$('ai-result').innerHTML='<p class="muted">Оценки ИИ появятся в карточках акций ниже. Открой акцию для объяснения признаков.</p>';
     if(watch) renderWatch(); else {
-      $('symbol').value=ticker;resetRiskContext();clearSingle();
+      $('symbol').value=ticker;resetRiskContext();clearSingle(analysisStarted?'Загружаем данные…':'',analysisStarted?'loading':'idle');
+      updateIntraday(null);
+      if(!analysisStarted){ $('chart-empty').textContent='График появится после анализа'; $('price-change').textContent='Котировка появится после анализа.'; }
       document.dispatchEvent(new CustomEvent('vorby:analysis-selection',{detail:{ticker,mode}}));
       if(lastQuote)document.dispatchEvent(new CustomEvent('vorby:analysis-quote',{detail:lastQuote}));
       $('forward-result').innerHTML=mode==='demo'?'<p class="muted">В учебном режиме исходы вымышлены. Здесь появятся только наблюдения реального рынка.</p>':'<p class="muted">Читаем сохранённые наблюдения…</p>';
@@ -634,14 +668,15 @@
       loadForward(generation);
       loadPaper(generation);
     }
-    poll(generation);
+    if(analysisStarted)poll(generation);
   }
   document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>{
     mode=button.dataset.mode;
+    if(!watch)analysisStarted=mode==='demo';
     history.replaceState(null,'',`${location.pathname}?mode=${mode}${watch?'':'&ticker='+encodeURIComponent(ticker)}`);
     restart();
   }));
-  $('refresh').addEventListener('click',restart);
+  $('refresh')?.addEventListener('click',restart);
   if(watch) {
     InstrumentSearch.attach({
       input:$('tickers'),dropdown:$('tickers-suggestions'),sharesOnly:true,
@@ -711,29 +746,25 @@
       $('research-form').querySelector('button').disabled=false;
       $('research-result').textContent='Источник данных изменён. Запусти историческую проверку.';
     });
-    const forecastTickers=new Set(document.body.dataset.forecastTickers?.split(' ') || []);
-    function selectStock(value){
-      ticker=value;
-      save('vorby.symbol',ticker);
-      history.replaceState(null,'',`/?ticker=${encodeURIComponent(ticker)}&mode=${mode}`);
-      restart();
-    }
-    InstrumentSearch.attach({
+    const stockSearch=InstrumentSearch.attach({
       input:$('symbol'),dropdown:$('symbol-suggestions'),sharesOnly:true,
-      onSelect:item=>selectStock(item.ticker)
+      onSelect:item=>{ $('symbol').value=item.ticker; }
     });
-    $('symbol-form').addEventListener('submit',async event=>{
-      event.preventDefault();const value=$('symbol').value.trim().toUpperCase();
-      if(!validTicker(value)) {$('load-status').textContent='Введи биржевой тикер латиницей, например SBER.';return;}
-      if(forecastTickers.has(value)){selectStock(value);return;}
-      const button=event.submitter || $('symbol-form').querySelector('button[type="submit"]');
-      button.disabled=true;
-      $('load-status').textContent='Проверяем тикер…';
-      try {
-        if(!await InstrumentSearch.exact(value)) {$('load-status').textContent=`Акция ${value} не найдена. Выбери её из подсказок.`;return;}
-      } catch {$('load-status').textContent='Не удалось проверить тикер. Попробуй ещё раз, когда поиск заработает.';return;}
-      finally{button.disabled=false;}
-      if($('symbol').value.trim().toUpperCase()===value)selectStock(value);
+    $('symbol-form').addEventListener('submit',event=>{
+      event.preventDefault();
+      const value=$('symbol').value.trim().toUpperCase();
+      if(!validTicker(value)) {
+        $('analysis-progress').textContent='Введи биржевой тикер, например SBER.';
+        return;
+      }
+      stockSearch?.close();
+      ticker=value;
+      mode='live';
+      analysisStarted=true;
+      save('vorby.symbol',ticker);
+      history.replaceState(null,'',`/?mode=live&ticker=${encodeURIComponent(ticker)}`);
+      restart();
+      document.dispatchEvent(new CustomEvent('vorby:analysis-start',{detail:{ticker}}));
     });
     $('research-form').addEventListener('submit',async event=>{
       event.preventDefault();const revision=++researchGeneration,button=event.submitter || document.querySelector('#research-form button');
@@ -747,7 +778,7 @@
       finally {if(revision===researchGeneration)button.disabled=false;}
     });
   }
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)restart();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&watch)restart();});
   document.querySelectorAll('[data-structure-layer]').forEach(input=>input.addEventListener('change',()=>{
     if(chartSnapshot){const c=chartSnapshot;drawChart(c.data,c.markers,c.ranges,c.structure,c.technical);}
   }));
@@ -769,7 +800,7 @@
   // Clear actionable prices even if a slow request or a disconnected server delays polling.
   setInterval(()=>{
     if(mode!=='live')return;
-    if(!watch)updateQuoteTime();
+    if(!watch){updateQuoteTime();if(intradayPayload)updateIntraday(intradayPayload);}
     if(!watch&&$('research-helper')&&currentHelper?.data_review?.state==='fresh_live'&&Date.now()>Date.parse(currentHelper.data_review.valid_until)){
       currentHelper=window.VorbyResearchHelper.state(currentHelper,mode);
       $('research-helper').innerHTML=window.VorbyResearchHelper.markup(currentHelper,mode);

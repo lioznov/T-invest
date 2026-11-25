@@ -120,10 +120,10 @@
 
         <!-- Кнопка выпадающего списка -->
         <div class="watchlist-dropdown-container">
-            <button class="watchlist-btn" onclick="toggleWatchlistDropdown()">
-                Список активов (<span id="watchlistCount">0</span>) ▾
+            <button type="button" id="watchlistTrigger" class="watchlist-btn" aria-expanded="false" aria-controls="watchlistDropdown">
+                Список активов <span id="watchlistCount">0</span>
             </button>
-            <div id="watchlistDropdown" class="watchlist-content">
+            <div id="watchlistDropdown" class="watchlist-content" hidden>
                 <div style="padding: 10px; text-align: center; color: gray; font-size: 12px;">Список пуст</div>
             </div>
         </div>
@@ -149,10 +149,21 @@
 
     let savedRadars = JSON.parse(localStorage.getItem('investpro_saved_radars') || '[]');
 
-    function toggleWatchlistDropdown() {
-        const dd = document.getElementById('watchlistDropdown');
-        dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+    const watchlistTrigger = document.getElementById('watchlistTrigger');
+    const watchlistMenu = document.getElementById('watchlistDropdown');
+
+    function setWatchlistOpen(open) {
+        watchlistMenu.hidden = !open;
+        watchlistTrigger.setAttribute('aria-expanded', String(open));
     }
+
+    watchlistTrigger.addEventListener('click', () => setWatchlistOpen(watchlistMenu.hidden));
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !watchlistMenu.hidden) {
+            setWatchlistOpen(false);
+            watchlistTrigger.focus();
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
         InstrumentSearch.attach({
@@ -301,7 +312,7 @@
             document.getElementById('searchDropdown').style.display = 'none';
         }
         if (!e.target.closest('.watchlist-dropdown-container')) {
-            document.getElementById('watchlistDropdown').style.display = 'none';
+            setWatchlistOpen(false);
         }
     });
 </script>

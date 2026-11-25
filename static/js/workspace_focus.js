@@ -1,18 +1,6 @@
 /* Navigation only: existing analysis and data-quality rules remain authoritative. */
 (function () {
   'use strict';
-  if (document.body.classList.contains('focus-workspace')) {
-    document.querySelectorAll('main details > summary').forEach(summary => {
-      const label = document.createElement('span');
-      label.className = 'disclosure-label';
-      label.append(...summary.childNodes);
-      const arrow = document.createElement('span');
-      arrow.className = 'disclosure-chevron';
-      arrow.setAttribute('aria-hidden', 'true');
-      summary.append(label, arrow);
-      summary.classList.add('aligned-disclosure');
-    });
-  }
   window.VorbyRiskUI?.bind(document.getElementById('risk-form'),document);
   const tabs = [...document.querySelectorAll('[data-focus-tab]')];
   const panes = [...document.querySelectorAll('[data-focus-pane]')];
